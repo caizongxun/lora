@@ -9,31 +9,19 @@ from typing import Tuple, List, Any
 
 
 def load_gsm8k_samples(num_samples: int = 100) -> Tuple[List[str], List[str]]:
-    """
-    Load GSM8K dataset samples for mathematical reasoning evaluation
-    
-    Args:
-        num_samples (int): Number of test samples to load (default: 100)
-        
-    Returns:
-        questions_list (list[str]): List of mathematical question texts
-        ground_truth_answers (list[str]): List of correct answer strings
-    """
+    """Load GSM8K dataset samples"""
     try:
-        # Load GSM8K dataset from HuggingFace
         dataset = load_dataset("gsm8k", "main", split="test")
         
-        # Limit to specified number of samples
         if num_samples and len(dataset) > num_samples:
             dataset = dataset.select(range(num_samples))
         
-        questions_list = []  # Problem text list (list[str])
-        ground_truth_answers = []  # Correct answer list (list[str])
+        questions_list = []
+        ground_truth_answers = []
         
         for sample in dataset:
             questions_list.append(sample["question"])
-            # Extract final numeric answer from answer field
-            answer_text = sample["answer"]  # Format: "... answer\n#### <number>"
+            answer_text = sample["answer"]
             match = re.search(r"####\s*(-?\d+)", answer_text)
             if match:
                 ground_truth_answers.append(match.group(1))
@@ -49,33 +37,26 @@ def load_gsm8k_samples(num_samples: int = 100) -> Tuple[List[str], List[str]]:
 
 
 def load_commonsenseqa_samples(num_samples: int = 100) -> Tuple[List[str], List[str]]:
-    """
-    Load CommonsenseQA dataset samples for commonsense reasoning evaluation
-    
-    Args:
-        num_samples (int): Number of test samples to load (default: 100)
-        
-    Returns:
-        questions_list (list[str]): List of multiple-choice question texts
-        ground_truth_answers (list[str]): List of correct answer strings
-    """
+    """Load CommonsenseQA dataset samples"""
     try:
-        # Load CommonsenseQA dataset from HuggingFace
-        dataset = load_dataset("commonsenseqa", split="validation")
+        # Fixed: correct dataset name is 'tau/commonsense_qa' or just 'commonsense_qa'
+        # Trying both common identifiers
+        try:
+            dataset = load_dataset("commonsense_qa", split="validation", trust_remote_code=True)
+        except:
+            dataset = load_dataset("tau/commonsense_qa", split="validation", trust_remote_code=True)
         
-        # Limit to specified number of samples
         if num_samples and len(dataset) > num_samples:
             dataset = dataset.select(range(num_samples))
         
-        questions_list = []  # Question text list (list[str])
-        ground_truth_answers = []  # Correct answer list (list[str])
+        questions_list = []
+        ground_truth_answers = []
         
         for sample in dataset:
-            question_text = sample["question"]  # Main question
-            choices = sample["choices"]["text"]  # List of choice texts
-            choices_labels = sample["choices"]["label"]  # Labels (A, B, C, D, E)
+            question_text = sample["question"]
+            choices = sample["choices"]["text"]
+            choices_labels = sample["choices"]["label"]
             
-            # Format question with options
             formatted_question = f"{question_text}\nOptions:\n"
             for label, choice in zip(choices_labels, choices):
                 formatted_question += f"{label}. {choice}\n"
@@ -92,26 +73,20 @@ def load_commonsenseqa_samples(num_samples: int = 100) -> Tuple[List[str], List[
 
 
 def load_svamp_samples(num_samples: int = 100) -> Tuple[List[str], List[str]]:
-    """
-    Load SVAMP dataset samples for symbolic reasoning evaluation
-    
-    Args:
-        num_samples (int): Number of test samples to load (default: 100)
-        
-    Returns:
-        questions_list (list[str]): List of arithmetic word problem texts
-        ground_truth_answers (list[str]): List of correct numerical answers
-    """
+    """Load SVAMP dataset samples"""
     try:
-        # Load SVAMP dataset from HuggingFace
-        dataset = load_dataset("svamp", split="test")
+        # Fixed: SVAMP is often hosted under specific organizations or names
+        # Trying ChilleD/SVAMP as it is a reliable mirror
+        try:
+            dataset = load_dataset("ChilleD/SVAMP", split="test", trust_remote_code=True)
+        except:
+            dataset = load_dataset("rkcosner/SVAMP", split="test", trust_remote_code=True)
         
-        # Limit to specified number of samples
         if num_samples and len(dataset) > num_samples:
             dataset = dataset.select(range(num_samples))
         
-        questions_list = []  # Problem text list (list[str])
-        ground_truth_answers = []  # Correct answer list (list[str])
+        questions_list = []
+        ground_truth_answers = []
         
         for sample in dataset:
             questions_list.append(sample["Body"] + " " + sample["Question"])
@@ -126,42 +101,28 @@ def load_svamp_samples(num_samples: int = 100) -> Tuple[List[str], List[str]]:
 
 
 def load_all_datasets(num_samples: int = 100) -> dict:
-    """
-    Load all three evaluation datasets
+    """Load all datasets"""
+    datasets_dict = {}
     
-    Args:
-        num_samples (int): Number of samples per dataset (default: 100)
-        
-    Returns:
-        datasets_dict (dict): Dictionary containing all loaded datasets
-            Structure:
-            {
-                "gsm8k": {"questions": [...], "answers": [...]},
-                "commonsenseqa": {"questions": [...], "answers": [...]},
-                "svamp": {"questions": [...], "answers": [...]}
-            }
-    """
-    datasets_dict = {}  # Container for all datasets (dict[str, dict])
+    questions, answers = load_gsm8k_samples(num_samples)
+    if questions:
+        datasets_dict["gsm8k"] = {
+            "questions_list": questions,
+            "ground_truth_answers": answers
+        }
     
-    # Load GSM8K dataset
-    gsm8k_questions, gsm8k_answers = load_gsm8k_samples(num_samples)
-    datasets_dict["gsm8k"] = {
-        "questions_list": gsm8k_questions,
-        "ground_truth_answers": gsm8k_answers
-    }
+    questions, answers = load_commonsenseqa_samples(num_samples)
+    if questions:
+        datasets_dict["commonsenseqa"] = {
+            "questions_list": questions,
+            "ground_truth_answers": answers
+        }
     
-    # Load CommonsenseQA dataset
-    cqa_questions, cqa_answers = load_commonsenseqa_samples(num_samples)
-    datasets_dict["commonsenseqa"] = {
-        "questions_list": cqa_questions,
-        "ground_truth_answers": cqa_answers
-    }
-    
-    # Load SVAMP dataset
-    svamp_questions, svamp_answers = load_svamp_samples(num_samples)
-    datasets_dict["svamp"] = {
-        "questions_list": svamp_questions,
-        "ground_truth_answers": svamp_answers
-    }
+    questions, answers = load_svamp_samples(num_samples)
+    if questions:
+        datasets_dict["svamp"] = {
+            "questions_list": questions,
+            "ground_truth_answers": answers
+        }
     
     return datasets_dict
