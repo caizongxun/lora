@@ -39,12 +39,11 @@ def load_gsm8k_samples(num_samples: int = 100) -> Tuple[List[str], List[str]]:
 def load_commonsenseqa_samples(num_samples: int = 100) -> Tuple[List[str], List[str]]:
     """Load CommonsenseQA dataset samples"""
     try:
-        # Fixed: correct dataset name is 'tau/commonsense_qa' or just 'commonsense_qa'
-        # Trying both common identifiers
+        # Fixed: Removed trust_remote_code=True as it's deprecated for standard datasets
         try:
-            dataset = load_dataset("commonsense_qa", split="validation", trust_remote_code=True)
+            dataset = load_dataset("commonsense_qa", split="validation")
         except:
-            dataset = load_dataset("tau/commonsense_qa", split="validation", trust_remote_code=True)
+            dataset = load_dataset("tau/commonsense_qa", split="validation")
         
         if num_samples and len(dataset) > num_samples:
             dataset = dataset.select(range(num_samples))
@@ -75,12 +74,11 @@ def load_commonsenseqa_samples(num_samples: int = 100) -> Tuple[List[str], List[
 def load_svamp_samples(num_samples: int = 100) -> Tuple[List[str], List[str]]:
     """Load SVAMP dataset samples"""
     try:
-        # Fixed: SVAMP is often hosted under specific organizations or names
-        # Trying ChilleD/SVAMP as it is a reliable mirror
+        # Fixed: Removed trust_remote_code=True as it's deprecated for standard datasets
         try:
-            dataset = load_dataset("ChilleD/SVAMP", split="test", trust_remote_code=True)
+            dataset = load_dataset("ChilleD/SVAMP", split="test")
         except:
-            dataset = load_dataset("rkcosner/SVAMP", split="test", trust_remote_code=True)
+            dataset = load_dataset("rkcosner/SVAMP", split="test")
         
         if num_samples and len(dataset) > num_samples:
             dataset = dataset.select(range(num_samples))
