@@ -1,0 +1,245 @@
+"""
+Model evaluator module for comparing baseline and LoRA-tuned models
+Implements inference and performance measurement
+"""
+
+import re
+import time
+import torch
+from typing import Dict, List, Any
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from peft import get_peft_model, LoraConfig
+from config import GENERATION_CONFIG, DEVICE, TIMEOUT_SECONDS
+
+
+def extract_answer(response: str) -> str:
+    """
+    Extract numerical answer from model response text
+    Uses regex to find the final numeric answer
+    
+    Args:
+        response (str): Model generated text response
+        
+    Returns:
+        answer (str): Extracted numeric answer string
+    """
+    # Try multiple patterns to extract answers
+    patterns = [
+        r"answer[:]?\s*(-?\d+)",
+        r"=\s*(-?\d+)",
+        r"is\s*(-?\d+)",
+        r"(-?\d+)\s*(?:is the|answer|result)",
+        r"(-?\d+)$"
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, response, re.IGNORECASE)
+        if match:
+            return match.group(1)
+    
+    # If no number found, return empty string
+    return ""
+
+
+def evaluate_baseline_model(
+    model_name: str,
+    datasets_dict: Dict[str, Dict[str, List]]
+) -> Dict[str, Dict[str, Any]]:
+    """
+    Evaluate baseline model (untuned) on all datasets
+    
+    Args:
+        model_name (str): Model identifier from HuggingFace (e.g., "microsoft/phi-2")
+        datasets_dict (dict): Dictionary containing datasets
+            Structure: {"dataset_name": {"questions_list": [...], "ground_truth_answers": [...]}}
+            
+    Returns:
+        baseline_results (dict): Evaluation results for baseline model
+            Structure: {
+                "dataset_name": {
+                    "accuracy": float (0-1),
+                    "correct_count": int,
+                    "total_count": int,
+                    "predictions": list[str],
+                    "inference_time": float (seconds)
+                }
+            }
+    """
+    print(f"Loading baseline model: {model_name}")
+    
+    # [BREAKPOINT_3] - Model Loading
+    # Description: Load pretrained model and tokenizer from HuggingFace to specified device
+    base_model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        torch_dtype=torch.float16,
+        device_map="auto"
+    )
+    tokenizer_base = AutoTokenizer.from_pretrained(model_name)
+    tokenizer_base.pad_token = tokenizer_base.eos_token
+    
+    baseline_results = {}  # Container for all results (dict[str, dict])
+    
+    for dataset_name, dataset_content in datasets_dict.items():
+        questions_list = dataset_content["questions_list"]  # Question text list (list[str])
+        ground_truth_answers = dataset_content["ground_truth_answers"]  # Correct answer list (list[str])
+        
+        predictions = []  # Model predictions list (list[str])
+        correct_count = 0  # Number of correct predictions (int)
+        start_time = time.time()  # Inference start timestamp (float)
+        
+        print(f"Evaluating baseline on {dataset_name}...")
+        
+        for idx, question in enumerate(questions_list):
+            try:
+                # [BREAKPOINT_1] - Model Inference
+                # Description: Execute model inference with tokenized input and generate output
+                inputs = tokenizer_base(question, return_tensors="pt", truncation=True, max_length=512).to(DEVICE)
+                with torch.no_grad():
+                    outputs = base_model.generate(
+                        **inputs,
+                        max_length=GENERATION_CONFIG["max_length"],
+                        temperature=GENERATION_CONFIG["temperature"],
+                        top_p=GENERATION_CONFIG["top_p"],
+                        do_sample=GENERATION_CONFIG["do_sample"]
+                    )
+                response = tokenizer_base.decode(outputs[0], skip_special_tokens=True)
+                
+                # [BREAKPOINT_2] - Answer Extraction and Comparison
+                # Description: Extract final numeric answer using regex and compare with ground truth
+                extracted_answer = extract_answer(response)  # Returns string
+                predictions.append(extracted_answer)
+                
+                # Compare extracted answer with ground truth
+                is_correct = (extracted_answer == ground_truth_answers[idx])
+                if is_correct:
+                    correct_count += 1
+                    
+            except Exception as e:
+                print(f"Error processing sample {idx}: {e}")
+                predictions.append("")
+        
+        end_time = time.time()  # Inference end timestamp (float)
+        elapsed_time = end_time - start_time  # Total inference time in seconds (float)
+        
+        # Calculate accuracy
+        total_count = len(questions_list)  # Total number of samples (int)
+        baseline_accuracy = correct_count / total_count if total_count > 0 else 0.0  # Accuracy ratio (float, 0-1)
+        
+        baseline_results[dataset_name] = {
+            "accuracy": baseline_accuracy,
+            "correct_count": correct_count,
+            "total_count": total_count,
+            "predictions": predictions,
+            "inference_time": elapsed_time
+        }
+        
+        print(f"Baseline {dataset_name} Accuracy: {baseline_accuracy:.2%} ({correct_count}/{total_count})")
+    
+    return baseline_results
+
+
+def evaluate_lora_model(
+    model_name: str,
+    lora_config_dict: Dict[str, Any],
+    datasets_dict: Dict[str, Dict[str, List]]
+) -> Dict[str, Dict[str, Any]]:
+    """
+    Evaluate LoRA-tuned model on all datasets
+    
+    Args:
+        model_name (str): Base model identifier from HuggingFace
+        lora_config_dict (dict): LoRA configuration parameters
+            Keys: r, lora_alpha, target_modules, lora_dropout, bias, task_type
+        datasets_dict (dict): Dictionary containing datasets
+            
+    Returns:
+        lora_results (dict): Evaluation results for LoRA model
+            Structure: Same as baseline_results
+    """
+    print(f"Loading base model for LoRA: {model_name}")
+    
+    # [BREAKPOINT_3] - Model Loading
+    # Description: Load pretrained model and tokenizer from HuggingFace
+    base_model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        torch_dtype=torch.float16,
+        device_map="auto"
+    )
+    tokenizer_base = AutoTokenizer.from_pretrained(model_name)
+    tokenizer_base.pad_token = tokenizer_base.eos_token
+    
+    print(f"Applying LoRA configuration...")
+    
+    # [BREAKPOINT_4] - LoRA Configuration Application
+    # Description: Create LoRA configuration and wrap model with PEFT for parameter-efficient tuning
+    lora_config = LoraConfig(
+        r=lora_config_dict["r"],
+        lora_alpha=lora_config_dict["lora_alpha"],
+        target_modules=lora_config_dict["target_modules"],
+        lora_dropout=lora_config_dict["lora_dropout"],
+        bias=lora_config_dict["bias"],
+        task_type=lora_config_dict["task_type"]
+    )
+    
+    lora_model = get_peft_model(base_model, lora_config)  # LoRA-adapted model instance (PeftModel)
+    lora_model.print_trainable_parameters()
+    
+    lora_results = {}  # Container for LoRA results (dict[str, dict])
+    
+    for dataset_name, dataset_content in datasets_dict.items():
+        questions_list = dataset_content["questions_list"]  # Question text list (list[str])
+        ground_truth_answers = dataset_content["ground_truth_answers"]  # Correct answer list (list[str])
+        
+        predictions = []  # Model predictions list (list[str])
+        correct_count = 0  # Number of correct predictions (int)
+        start_time = time.time()  # Inference start timestamp (float)
+        
+        print(f"Evaluating LoRA model on {dataset_name}...")
+        
+        for idx, question in enumerate(questions_list):
+            try:
+                # [BREAKPOINT_5] - LoRA Model Inference
+                # Description: Execute inference with LoRA-tuned model
+                inputs = tokenizer_base(question, return_tensors="pt", truncation=True, max_length=512).to(DEVICE)
+                with torch.no_grad():
+                    outputs = lora_model.generate(
+                        **inputs,
+                        max_length=GENERATION_CONFIG["max_length"],
+                        temperature=GENERATION_CONFIG["temperature"],
+                        top_p=GENERATION_CONFIG["top_p"],
+                        do_sample=GENERATION_CONFIG["do_sample"]
+                    )
+                response = tokenizer_base.decode(outputs[0], skip_special_tokens=True)
+                
+                # [BREAKPOINT_6] - Answer Extraction and Accuracy Calculation
+                # Description: Extract final numeric answer and calculate accuracy
+                extracted_answer = extract_answer(response)  # Returns string
+                predictions.append(extracted_answer)
+                
+                # Compare extracted answer with ground truth
+                is_correct = (extracted_answer == ground_truth_answers[idx])
+                if is_correct:
+                    correct_count += 1
+                    
+            except Exception as e:
+                print(f"Error processing sample {idx}: {e}")
+                predictions.append("")
+        
+        end_time = time.time()  # Inference end timestamp (float)
+        elapsed_time = end_time - start_time  # Total inference time in seconds (float)
+        
+        # Calculate accuracy
+        total_count = len(questions_list)  # Total number of samples (int)
+        lora_accuracy = correct_count / total_count if total_count > 0 else 0.0  # Accuracy ratio (float, 0-1)
+        
+        lora_results[dataset_name] = {
+            "accuracy": lora_accuracy,
+            "correct_count": correct_count,
+            "total_count": total_count,
+            "predictions": predictions,
+            "inference_time": elapsed_time
+        }
+        
+        print(f"LoRA {dataset_name} Accuracy: {lora_accuracy:.2%} ({correct_count}/{total_count})")
+    
+    return lora_results
