@@ -41,7 +41,8 @@ def print_variable_info(var_name, var_value, var_type=None):
         print("\nContent Preview:")
         for key, val in list(var_value.items())[:3]:  # Show first 3 items
             if isinstance(val, dict):
-                print(f"  {key}: {{\'accuracy\': {val.get(\'accuracy\', \'N/A\')}, ...}}")
+                accuracy_val = val.get('accuracy', 'N/A')
+                print(f"  {key}: {{accuracy: {accuracy_val}, ...}}")
             else:
                 print(f"  {key}: {val}")
         if len(var_value) > 3:
@@ -95,8 +96,10 @@ def main():
             print(f"    - Questions: {questions_count}")
             print(f"    - Answers: {answers_count}")
             if questions_count > 0:
-                print(f"    - Sample question: {dataset_content['questions_list'][0][:80]}...")
-                print(f"    - Sample answer: {dataset_content['ground_truth_answers'][0]}")
+                sample_q = dataset_content['questions_list'][0][:80]
+                sample_a = dataset_content['ground_truth_answers'][0]
+                print(f"    - Sample question: {sample_q}...")
+                print(f"    - Sample answer: {sample_a}")
         print("")
         
         # STEP 2: Evaluate Baseline Model
@@ -119,10 +122,11 @@ def main():
             baseline_accuracy = results["accuracy"]  # Accuracy ratio (float, 0-1)
             correct_count = results["correct_count"]  # Number of correct predictions (int)
             total_count = results["total_count"]  # Total number of samples (int)
+            inf_time = results['inference_time']
             print(f"  {dataset_name.upper()}:")
             print(f"    - Accuracy: {baseline_accuracy:.2%}")
             print(f"    - Correct: {correct_count}/{total_count}")
-            print(f"    - Inference Time: {results['inference_time']:.2f}s")
+            print(f"    - Inference Time: {inf_time:.2f}s")
         print("")
         
         # STEP 3: Evaluate LoRA Model
@@ -146,10 +150,11 @@ def main():
             lora_accuracy = results["accuracy"]  # Accuracy ratio (float, 0-1)
             correct_count = results["correct_count"]  # Number of correct predictions (int)
             total_count = results["total_count"]  # Total number of samples (int)
+            inf_time = results['inference_time']
             print(f"  {dataset_name.upper()}:")
             print(f"    - Accuracy: {lora_accuracy:.2%}")
             print(f"    - Correct: {correct_count}/{total_count}")
-            print(f"    - Inference Time: {results['inference_time']:.2f}s")
+            print(f"    - Inference Time: {inf_time:.2f}s")
         print("")
         
         # STEP 4: Calculate Comparison Metrics
