@@ -1,6 +1,7 @@
 """
 Model evaluator module for comparing baseline and LoRA-tuned models
 Implements inference and performance measurement
+Supports 8-bit quantization for reduced GPU memory usage
 """
 
 import re
@@ -8,10 +9,17 @@ import time
 import torch
 import gc
 from typing import Dict, List, Any
-from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig, BitsAndBytesConfig
 from peft import get_peft_model, LoraConfig
 from config import GENERATION_CONFIG, DEVICE, TIMEOUT_SECONDS
 
+# Configuration for 8-bit quantization
+QUANTIZATION_CONFIG = BitsAndBytesConfig(
+    load_in_8bit=True,
+    bnb_8bit_quant_type="nf4",
+    bnb_8bit_use_double_quant=True,
+    bnb_8bit_compute_dtype=torch.bfloat16
+)
 
 def extract_answer(response: str) -> str:
     """
@@ -67,9 +75,10 @@ def evaluate_baseline_model(
             }
     """
     print(f"Loading baseline model: {model_name}")
+    print(f"Using 8-bit quantization to save GPU memory...")
 
-    # [BREAKPOINT_3] - Model Loading
-    # Description: Load pretrained model and tokenizer from HuggingFace to specified device
+    # [BREAKPOINT_3] - Model Loading with 8-bit Quantization
+    # Description: Load pretrained model with 8-bit quantization for memory efficiency
     # Load config first with explicit trust_remote_code=True
     config = AutoConfig.from_pretrained(
         model_name,
@@ -79,8 +88,8 @@ def evaluate_baseline_model(
     base_model = AutoModelForCausalLM.from_pretrained(
         model_name,
         config=config,
-        torch_dtype=torch.float16,
-        device_map="auto",
+        quantization_config=QUANTIZATION_CONFIG,
+        device_map="cuda",
         trust_remote_code=True  # Required for Phi-3 custom code
     )
     tokenizer_base = AutoTokenizer.from_pretrained(
@@ -88,7 +97,7 @@ def evaluate_baseline_model(
         trust_remote_code=True  # Required for Phi-3 custom code
     )
     tokenizer_base.pad_token = tokenizer_base.eos_token
-    print(f"✅ Baseline model loaded on device: {base_model.device}")
+    print(f"✅ Baseline model loaded on device: {base_model.device} (8-bit quantized)")
     
     baseline_results = {}  # Container for all results (dict[str, dict])
     
@@ -195,9 +204,10 @@ def evaluate_lora_model(
             Structure: Same as baseline_results
     """
     print(f"Loading base model for LoRA: {model_name}")
+    print(f"Using 8-bit quantization to save GPU memory...")
     
-    # [BREAKPOINT_3] - Model Loading
-    # Description: Load pretrained model and tokenizer from HuggingFace
+    # [BREAKPOINT_3] - Model Loading with 8-bit Quantization
+    # Description: Load pretrained model with 8-bit quantization for memory efficiency
     # Load config first with explicit trust_remote_code=True
     config = AutoConfig.from_pretrained(
         model_name,
@@ -207,8 +217,8 @@ def evaluate_lora_model(
     base_model = AutoModelForCausalLM.from_pretrained(
         model_name,
         config=config,
-        torch_dtype=torch.float16,
-        device_map="auto",
+        quantization_config=QUANTIZATION_CONFIG,
+        device_map="cuda",
         trust_remote_code=True  # Required for Phi-3 custom code
     )
     tokenizer_base = AutoTokenizer.from_pretrained(
@@ -216,7 +226,7 @@ def evaluate_lora_model(
         trust_remote_code=True  # Required for Phi-3 custom code
     )
     tokenizer_base.pad_token = tokenizer_base.eos_token
-    print(f"✅ LoRA base model loaded on device: {base_model.device}")
+    print(f"✅ LoRA base model loaded on device: {base_model.device} (8-bit quantized)")
     
     print(f"Applying LoRA configuration...")
     
