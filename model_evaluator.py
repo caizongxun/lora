@@ -1,7 +1,7 @@
 """
 Model evaluator module for comparing baseline and LoRA-tuned models
 Implements inference and performance measurement
-Uses 8-bit quantization for minimal memory usage
+Uses 8-bit quantization with CPU offload for minimal GPU memory usage
 """
 
 import re
@@ -82,12 +82,13 @@ def extract_answer(response: str) -> str:
 
 
 def get_quantization_config():
-    """Create 8-bit quantization config for memory efficiency"""
+    """Create 8-bit quantization config with CPU offload for memory efficiency"""
     return BitsAndBytesConfig(
         load_in_8bit=True,
         bnb_8bit_compute_dtype=torch.float16,
         bnb_8bit_use_double_quant=True,
-        bnb_8bit_quant_type="nf4"
+        bnb_8bit_quant_type="nf4",
+        load_in_8bit_fp32_cpu_offload=True  # 🔧 ADDED: Allow CPU offload for layers that don't fit in GPU
     )
 
 
@@ -97,14 +98,14 @@ def evaluate_baseline_model(
 ) -> Dict[str, Dict[str, Any]]:
     """
     Evaluate baseline model (untuned) on all datasets
-    Uses 8-bit quantization for memory efficiency
+    Uses 8-bit quantization with CPU offload for memory efficiency
     """
     print(f"Loading baseline model: {model_name}")
-    print(f"Using 8-bit quantization with automatic memory management...")
+    print(f"Using 8-bit quantization with CPU offload...")
 
-    # 🔧 Use 8-bit quantization for ~4GB memory usage
+    # 🔧 Use 8-bit quantization with CPU offload
     quantization_config = get_quantization_config()
-    print(f"🔍 Debug: Loading with 8-bit quantization, device_map='auto'...")
+    print(f"🔍 Debug: Loading with 8-bit quantization + CPU offload...")
     
     base_model = AutoModelForCausalLM.from_pretrained(
         model_name,
@@ -113,7 +114,7 @@ def evaluate_baseline_model(
         trust_remote_code=True
     )
     
-    print(f"✅ Model loaded with 8-bit quantization")
+    print(f"✅ Model loaded with 8-bit quantization + CPU offload")
     print(f"✅ Model dtype: {base_model.dtype}")
     
     tokenizer_base = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
@@ -213,14 +214,14 @@ def evaluate_lora_model(
 ) -> Dict[str, Dict[str, Any]]:
     """
     Evaluate LoRA-tuned model on all datasets
-    Uses 8-bit quantization for memory efficiency
+    Uses 8-bit quantization with CPU offload for memory efficiency
     """
     print(f"Loading base model for LoRA: {model_name}")
-    print(f"Using 8-bit quantization with automatic memory management...")
+    print(f"Using 8-bit quantization with CPU offload...")
 
-    # 🔧 Use 8-bit quantization for ~4GB memory usage
+    # 🔧 Use 8-bit quantization with CPU offload
     quantization_config = get_quantization_config()
-    print(f"🔍 Debug: Loading with 8-bit quantization, device_map='auto'...")
+    print(f"🔍 Debug: Loading with 8-bit quantization + CPU offload...")
     
     base_model = AutoModelForCausalLM.from_pretrained(
         model_name,
@@ -229,7 +230,7 @@ def evaluate_lora_model(
         trust_remote_code=True
     )
     
-    print(f"✅ Model loaded with 8-bit quantization")
+    print(f"✅ Model loaded with 8-bit quantization + CPU offload")
     print(f"✅ Model dtype: {base_model.dtype}")
     
     tokenizer_base = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
