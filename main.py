@@ -3,8 +3,8 @@ Main entry point for LoRA Fine-tuning Evaluation Pipeline
 Orchestrates data loading, model evaluation, and result generation
 With detailed variable inspection at each step
 
-🎯 KEY FIX: Now downloads actual trained LoRA weights from Hugging Face Hub
-           Instead of using random initialization
+KEY FIX: Now downloads actual trained LoRA weights from Hugging Face Hub
+         Instead of using random initialization
 
 NOTE: model_evaluator.py now uses 4-bit quantization for memory efficiency
       This allows the pipeline to run on RTX 3050 Ti (4GB VRAM)
@@ -130,8 +130,8 @@ def main():
     print(" "*20 + "LoRA Fine-Tuning Evaluation Pipeline")
     print(" "*15 + "With Step-by-Step Variable Inspection")
     print("="*80)
-    print("📌 Using 4-bit quantization for memory efficiency (RTX 3050 Ti compatible)")
-    print(f"📍 LoRA Model ID: {HF_MODEL_ID}")
+    print("[INFO] Using 4-bit quantization for memory efficiency (RTX 3050 Ti compatible)")
+    print(f"[INFO] LoRA Model ID: {HF_MODEL_ID}")
     print("")
     
     try:
@@ -139,7 +139,7 @@ def main():
         print_step_header(1, "Loading datasets")
         print("-"*80)
         
-        # 🔧 Sample size configuration
+        # Sample size configuration
         # 3: Quick test (very fast, ~5 minutes)
         # 10: Balanced (medium speed, ~10-15 minutes)
         # 100: Full evaluation (slow, ~60+ minutes)
@@ -148,7 +148,7 @@ def main():
         datasets_dict = load_all_datasets(num_samples=num_samples)  # Container for all datasets (dict[str, dict])
         print("")
         
-        # [BREAKPOINT_1_VARS] - Dataset loading variables
+        # Dataset loading variables
         print_variable_info("num_samples", num_samples, "int")
         print_variable_info("datasets_dict", datasets_dict, "dict")
         
@@ -170,7 +170,7 @@ def main():
         print("")
         
         # STEP 2: Evaluate Baseline Model
-        # 🔧 Uses 4-bit quantization in model_evaluator.py
+        # Uses 4-bit quantization in model_evaluator.py
         print_step_header(2, "Evaluating baseline model")
         print("-"*80)
         baseline_results = evaluate_baseline_model(
@@ -179,7 +179,7 @@ def main():
         )  # Results for baseline model (dict[str, dict])
         print("")
         
-        # [BREAKPOINT_2_VARS] - Baseline results
+        # Baseline results
         print_variable_info("baseline_results", baseline_results, "dict")
         
         # Additional statistics
@@ -198,21 +198,21 @@ def main():
         print("")
         
         # STEP 3: Evaluate LoRA Model
-        # 🎯 NOW DOWNLOADS ACTUAL TRAINED WEIGHTS FROM HF HUB
+        # NOW DOWNLOADS ACTUAL TRAINED WEIGHTS FROM HF HUB
         print_step_header(3, "Evaluating LoRA fine-tuned model")
         print("-"*80)
-        print(f"\n🔄 Downloading LoRA weights from Hugging Face Hub...")
-        print(f"   Repository: {HF_MODEL_ID}")
-        print(f"   (This may take a few seconds on first run)\n")
+        print(f"\n[INFO] Downloading LoRA weights from Hugging Face Hub...")
+        print(f"       Repository: {HF_MODEL_ID}")
+        print(f"       (This may take a few seconds on first run)\n")
         
         lora_results = evaluate_lora_model_with_checkpoint(
             model_name=BASE_MODEL_NAME,
-            hf_model_id=HF_MODEL_ID,  # 🎯 Pass the HF model ID to download weights
+            hf_model_id=HF_MODEL_ID,  # Pass the HF model ID to download weights
             datasets_dict=datasets_dict
         )  # Results for LoRA model (dict[str, dict])
         print("")
         
-        # [BREAKPOINT_3_VARS] - LoRA results
+        # LoRA results
         print_variable_info("lora_results", lora_results, "dict")
         
         # Additional statistics
@@ -239,7 +239,7 @@ def main():
         )  # Computed comparison metrics (dict[str, dict])
         print("")
         
-        # [BREAKPOINT_4_VARS] - Comparison metrics
+        # Comparison metrics
         print_variable_info("comparison_metrics", comparison_metrics, "dict")
         
         # Additional statistics
@@ -281,15 +281,15 @@ def main():
         print("")
         
         print("="*80)
-        print("✅ Evaluation pipeline completed successfully!")
-        print(f"📁 All results saved to: {OUTPUT_DIR}/")
+        print("[SUCCESS] Evaluation pipeline completed successfully!")
+        print(f"[INFO] All results saved to: {OUTPUT_DIR}/")
         print("="*80)
         
         return 0
         
     except Exception as e:
         print(f"")
-        print(f"❌ Error during evaluation: {str(e)}")
+        print(f"[ERROR] Error during evaluation: {str(e)}")
         print(f"")
         import traceback
         traceback.print_exc()
