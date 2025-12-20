@@ -107,11 +107,14 @@ class ColabLoRAEvaluator:
             )
         
         # Load base model
+        # FIXED: Use device_map="cuda" instead of "auto"
+        # Reason: device_map="auto" uses accelerate which calls .to() on quantized models,
+        # causing ValueError: `.to` is not supported for `4-bit` or `8-bit` bitsandbytes models
         print(f"\n⬇️ Loading base model: {self.base_model_name}...")
         self.base_model = AutoModelForCausalLM.from_pretrained(
             self.base_model_name,
             quantization_config=quantization_config,
-            device_map="auto",
+            device_map="cuda",  # FIXED: Changed from "auto" to "cuda"
             trust_remote_code=True
         )
         print("✅ Base model loaded")
@@ -190,8 +193,8 @@ class ColabLoRAEvaluator:
                 prompt = f"<|user|>\n{question}<|end|>\n<|assistant|>\n"
                 inputs = self.tokenizer(prompt, return_tensors="pt", padding=True)
                 # FIXED: Do NOT call .to() on 4-bit quantized models
-                # The model is already on the correct device via device_map="auto"
-                # Calling .to() will raise: ValueError: `.to` is not supported for `4-bit` or `8-bit` bitsandbytes models
+                # Move inputs to GPU instead
+                inputs = {k: v.to('cuda') for k, v in inputs.items()}
                 
                 with torch.no_grad():
                     outputs = model.generate(
@@ -237,8 +240,8 @@ class ColabLoRAEvaluator:
                 prompt = f"<|user|>\n{question}\nChoices: {', '.join(choices)}<|end|>\n<|assistant|>\n"
                 inputs = self.tokenizer(prompt, return_tensors="pt", padding=True)
                 # FIXED: Do NOT call .to() on 4-bit quantized models
-                # The model is already on the correct device via device_map="auto"
-                # Calling .to() will raise: ValueError: `.to` is not supported for `4-bit` or `8-bit` bitsandbytes models
+                # Move inputs to GPU instead
+                inputs = {k: v.to('cuda') for k, v in inputs.items()}
                 
                 with torch.no_grad():
                     outputs = model.generate(
@@ -274,8 +277,8 @@ class ColabLoRAEvaluator:
                 prompt = f"<|user|>\n{question}<|end|>\n<|assistant|>\n"
                 inputs = self.tokenizer(prompt, return_tensors="pt", padding=True)
                 # FIXED: Do NOT call .to() on 4-bit quantized models
-                # The model is already on the correct device via device_map="auto"
-                # Calling .to() will raise: ValueError: `.to` is not supported for `4-bit` or `8-bit` bitsandbytes models
+                # Move inputs to GPU instead
+                inputs = {k: v.to('cuda') for k, v in inputs.items()}
                 
                 with torch.no_grad():
                     outputs = model.generate(
