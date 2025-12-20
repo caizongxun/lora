@@ -9,8 +9,7 @@ import time
 import torch
 import gc
 from typing import Dict, List, Any
-from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig, BitsAndBytesConfig, StoppingCriteria, StoppingCriteriaList
-# FIX: Import the compatibility function
+from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig, BitsAndBytesConfig
 from peft import get_peft_model, LoraConfig, prepare_model_for_kbit_training
 from config import GENERATION_CONFIG, DEVICE, TIMEOUT_SECONDS
 
@@ -23,24 +22,8 @@ QUANTIZATION_CONFIG = BitsAndBytesConfig(
 )
 
 
-class StopOnToken(StoppingCriteria):
-    """
-    Stop generation when specific tokens are encountered
-    """
-    def __init__(self, stop_ids, tokenizer):
-        self.stop_ids = stop_ids
-        self.tokenizer = tokenizer
-    
-    def __call__(self, input_ids, scores, **kwargs):
-        if input_ids[0][-1] in self.stop_ids:
-            return True
-        return False
-
-
 def print_device_info():
-    """
-    Display current device information (GPU/CPU)
-    """
+    """Display current device information (GPU/CPU)"""
     if torch.cuda.is_available():
         device_name = torch.cuda.get_device_name(0)
         device_count = torch.cuda.device_count()
@@ -58,30 +41,16 @@ def print_device_info():
 
 
 def extract_answer(response: str) -> str:
-    """
-    Extract numerical answer or option letter (A-E) from model response text
-    
-    Strategy:
-    1. For numeric answers: Find ALL numbers in text, return the LAST one
-       (since final answer is always at the end of reasoning)
-    2. For options (A-E): Use priority rules to find the most explicit answer
-    
-    Args:
-        response (str): Model generated text response
-        
-    Returns:
-        answer (str): Extracted numeric answer string or option letter
-    """
+    """Extract numerical answer or option letter (A-E) from model response text"""
     if not response or not response.strip():
         return ""
     
     # PRIORITY 1: Look for explicit option format patterns first
-    # These are high-confidence indicators for multiple choice
     explicit_option_patterns = [
-        r"^\s*([A-E])\.\s",  # Starts with "A. ", "B. ", etc
-        r"answer[\s:]*([A-E])",  # "answer: A" or "answer A"
-        r"option[\s:]*([A-E])",  # "option: A" or "option A"
-        r"correct answer[\s:]*([A-E])",  # "correct answer: A"
+        r"^\s*([A-E])\.\s",
+        r"answer[\s:]*([A-E])",
+        r"option[\s:]*([A-E])",
+        r"correct answer[\s:]*([A-E])",
     ]
     
     for pattern in explicit_option_patterns:
@@ -90,12 +59,9 @@ def extract_answer(response: str) -> str:
             return match.group(1).upper()
     
     # PRIORITY 2: Extract ALL numbers and take the LAST one
-    # This handles numeric questions where final answer is at the end
     all_numbers = re.findall(r'-?\d+(?:,\d+)*(?:\.\d+)?', response)
     if all_numbers:
-        # Remove commas and decimal points to get clean numbers
         last_number = all_numbers[-1].replace(',', '')
-        # Convert to int if it's a whole number, otherwise keep as is
         try:
             if '.' not in last_number:
                 return str(int(last_number))
@@ -106,8 +72,8 @@ def extract_answer(response: str) -> str:
     
     # PRIORITY 3: Look for fallback option patterns
     fallback_patterns = [
-        r"[\b\(]([A-E])[\b\)]",  # "(A)" or "(A) text"
-        r"([A-E])\.",  # "A." but not at start
+        r"[\b\(]([A-E])[\b\)]",
+        r"([A-E])\.",
     ]
     
     for pattern in fallback_patterns:
@@ -115,7 +81,7 @@ def extract_answer(response: str) -> str:
         if matches:
             return matches[0].upper()
     
-    # PRIORITY 4: As last resort, just look for any single letter A-E
+    # PRIORITY 4: As last resort
     single_letter = re.search(r'[A-E]', response, re.IGNORECASE)
     if single_letter:
         return single_letter.group(0).upper()
@@ -151,10 +117,78 @@ def evaluate_baseline_model(
     baseline_results = {}
     
     for dataset_name, dataset_content in datasets_dict.items():
-        # ... (evaluation loop remains the same)
-        # ... (for brevity, loop content is omitted here, it is unchanged)
-        pass # Placeholder for the original loop
-
+        questions_list = dataset_content["questions_list"]
+        ground_truth_answers = dataset_content["ground_truth_answers"]
+        
+        predictions = []
+        correct_count = 0
+        start_time = time.time()
+        
+        print(f"Evaluating baseline on {dataset_name}...")
+        
+        for idx, question in enumerate(questions_list):
+            try:
+                prompt = f"<|user|>\n{question}<|end|>\n<|assistant|>\n"
+                inputs = tokenizer_base(prompt, return_tensors="pt", truncation=True, max_length=512)
+                input_ids = inputs["input_ids"].to(DEVICE)
+                attention_mask = inputs["attention_mask"].to(DEVICE)
+                
+                with torch.no_grad():
+                    outputs = base_model.generate(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask,
+                        max_new_tokens=512,
+                        do_sample=False,
+                        pad_token_id=tokenizer_base.eos_token_id
+                    )
+                
+                generated_tokens = outputs[0][len(input_ids[0]):]
+                response = tokenizer_base.decode(generated_tokens, skip_special_tokens=True)
+                
+                extracted_answer = extract_answer(response)
+                predictions.append(extracted_answer)
+                
+                if idx < 3:
+                    print(f"\n{'='*80}")
+                    print(f"[BASELINE] Debug Sample {idx} - {dataset_name}")
+                    print(f"{'='*80}")
+                    print(f"Question: {question[:200]}..." if len(question) > 200 else f"Question: {question}")
+                    print(f"\nModel Response: {response[:500]}..." if len(response) > 500 else f"\nModel Response: {response}")
+                    print(f"\nExtracted Answer: '{extracted_answer}'")
+                    print(f"Ground Truth: '{ground_truth_answers[idx]}'")
+                    print(f"Match: {'✅ YES' if extracted_answer == ground_truth_answers[idx] else '❌ NO'}")
+                    print(f"{'='*80}\n")
+                
+                is_correct = (extracted_answer == ground_truth_answers[idx])
+                if is_correct:
+                    correct_count += 1
+                
+                del input_ids, attention_mask, outputs
+                torch.cuda.empty_cache()
+                gc.collect()
+                    
+            except Exception as e:
+                print(f"Error processing sample {idx}: {e}")
+                predictions.append("")
+                torch.cuda.empty_cache()
+                gc.collect()
+        
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        
+        total_count = len(questions_list)
+        baseline_accuracy = correct_count / total_count if total_count > 0 else 0.0
+        
+        baseline_results[dataset_name] = {
+            "accuracy": baseline_accuracy,
+            "correct_count": correct_count,
+            "total_count": total_count,
+            "predictions": predictions,
+            "inference_time": elapsed_time
+        }
+        
+        print(f"Baseline {dataset_name} Accuracy: {baseline_accuracy:.2%} ({correct_count}/{total_count})")
+    
     print("Cleaning up baseline model from memory...")
     del base_model, tokenizer_base
     torch.cuda.empty_cache()
@@ -162,6 +196,7 @@ def evaluate_baseline_model(
     print("Memory cleaned.")
     
     return baseline_results
+
 
 def evaluate_lora_model(
     model_name: str,
@@ -187,10 +222,10 @@ def evaluate_lora_model(
     tokenizer_base.pad_token = tokenizer_base.eos_token
     print(f"✅ LoRA base model loaded on device: {base_model.device} (8-bit quantized)")
 
-    # FIX: Prepare the quantized model for LoRA
-    # This resolves the `memory_efficient_backward` attribute error
+    # 🔧 CRITICAL FIX: Prepare the quantized model for LoRA
     print("Preparing model for k-bit training (compatibility fix)...")
     base_model = prepare_model_for_kbit_training(base_model)
+    print("✅ Model preparation complete.")
     
     print_device_info()
     
@@ -211,10 +246,78 @@ def evaluate_lora_model(
     lora_results = {}
     
     for dataset_name, dataset_content in datasets_dict.items():
-        # ... (evaluation loop remains the same)
-        # ... (for brevity, loop content is omitted here, it is unchanged)
-        pass # Placeholder for the original loop
+        questions_list = dataset_content["questions_list"]
+        ground_truth_answers = dataset_content["ground_truth_answers"]
         
+        predictions = []
+        correct_count = 0
+        start_time = time.time()
+        
+        print(f"Evaluating LoRA model on {dataset_name}...")
+        
+        for idx, question in enumerate(questions_list):
+            try:
+                prompt = f"<|user|>\n{question}<|end|>\n<|assistant|>\n"
+                inputs = tokenizer_base(prompt, return_tensors="pt", truncation=True, max_length=512)
+                input_ids = inputs["input_ids"].to(DEVICE)
+                attention_mask = inputs["attention_mask"].to(DEVICE)
+                
+                with torch.no_grad():
+                    outputs = lora_model.generate(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask,
+                        max_new_tokens=512,
+                        do_sample=False,
+                        pad_token_id=tokenizer_base.eos_token_id
+                    )
+                
+                generated_tokens = outputs[0][len(input_ids[0]):]
+                response = tokenizer_base.decode(generated_tokens, skip_special_tokens=True)
+                
+                extracted_answer = extract_answer(response)
+                predictions.append(extracted_answer)
+                
+                if idx < 3:
+                    print(f"\n{'='*80}")
+                    print(f"[LoRA] Debug Sample {idx} - {dataset_name}")
+                    print(f"{'='*80}")
+                    print(f"Question: {question[:200]}..." if len(question) > 200 else f"Question: {question}")
+                    print(f"\nModel Response: {response[:500]}..." if len(response) > 500 else f"\nModel Response: {response}")
+                    print(f"\nExtracted Answer: '{extracted_answer}'")
+                    print(f"Ground Truth: '{ground_truth_answers[idx]}'")
+                    print(f"Match: {'✅ YES' if extracted_answer == ground_truth_answers[idx] else '❌ NO'}")
+                    print(f"{'='*80}\n")
+                
+                is_correct = (extracted_answer == ground_truth_answers[idx])
+                if is_correct:
+                    correct_count += 1
+                
+                del input_ids, attention_mask, outputs
+                torch.cuda.empty_cache()
+                gc.collect()
+                    
+            except Exception as e:
+                print(f"Error processing sample {idx}: {e}")
+                predictions.append("")
+                torch.cuda.empty_cache()
+                gc.collect()
+        
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        
+        total_count = len(questions_list)
+        lora_accuracy = correct_count / total_count if total_count > 0 else 0.0
+        
+        lora_results[dataset_name] = {
+            "accuracy": lora_accuracy,
+            "correct_count": correct_count,
+            "total_count": total_count,
+            "predictions": predictions,
+            "inference_time": elapsed_time
+        }
+        
+        print(f"LoRA {dataset_name} Accuracy: {lora_accuracy:.2%} ({correct_count}/{total_count})\n")
+    
     print("Cleaning up LoRA model from memory...")
     del lora_model, base_model, tokenizer_base
     torch.cuda.empty_cache()
