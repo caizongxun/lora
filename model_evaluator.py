@@ -73,9 +73,13 @@ def evaluate_baseline_model(
     base_model = AutoModelForCausalLM.from_pretrained(
         model_name,
         torch_dtype=torch.float16,
-        device_map="auto"
+        device_map="auto",
+        trust_remote_code=True  # Required for Phi-3 custom code
     )
-    tokenizer_base = AutoTokenizer.from_pretrained(model_name)
+    tokenizer_base = AutoTokenizer.from_pretrained(
+        model_name,
+        trust_remote_code=True  # Required for Phi-3 custom code
+    )
     tokenizer_base.pad_token = tokenizer_base.eos_token
     print(f"✅ Baseline model loaded on device: {base_model.device}")
     
@@ -190,9 +194,13 @@ def evaluate_lora_model(
     base_model = AutoModelForCausalLM.from_pretrained(
         model_name,
         torch_dtype=torch.float16,
-        device_map="auto"
+        device_map="auto",
+        trust_remote_code=True  # Required for Phi-3 custom code
     )
-    tokenizer_base = AutoTokenizer.from_pretrained(model_name)
+    tokenizer_base = AutoTokenizer.from_pretrained(
+        model_name,
+        trust_remote_code=True  # Required for Phi-3 custom code
+    )
     tokenizer_base.pad_token = tokenizer_base.eos_token
     print(f"✅ LoRA base model loaded on device: {base_model.device}")
     
