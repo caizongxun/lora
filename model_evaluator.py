@@ -92,16 +92,6 @@ def get_quantization_config():
     )
 
 
-def get_device_map():
-    """Create device map for hybrid GPU/CPU inference"""
-    # 🔧 Use max_memory to specify GPU and CPU memory allocation
-    max_memory = {
-        0: "3.5GiB",  # Reserve 3.5GB for GPU
-        "cpu": "16GiB"  # Use up to 16GB CPU RAM
-    }
-    return max_memory
-
-
 def evaluate_baseline_model(
     model_name: str,
     datasets_dict: Dict[str, Dict[str, List]]
@@ -115,13 +105,14 @@ def evaluate_baseline_model(
 
     # 🔧 Use 8-bit quantization with CPU offload
     quantization_config = get_quantization_config()
-    device_map = get_device_map()
-    print(f"🔍 Debug: Loading with 8-bit quantization + explicit device_map...")
+    max_memory = {0: "3.5GiB", "cpu": "32GiB"}  # 🔧 More generous CPU memory
+    print(f"🔍 Debug: Loading with 8-bit quantization + device_map='auto'...")
     
     base_model = AutoModelForCausalLM.from_pretrained(
         model_name,
         quantization_config=quantization_config,
-        device_map=device_map,  # 🔧 CHANGED: Use explicit device_map instead of 'auto'
+        device_map="auto",
+        max_memory=max_memory,  # 🔧 ADDED: Explicit memory limits
         trust_remote_code=True
     )
     
@@ -232,13 +223,14 @@ def evaluate_lora_model(
 
     # 🔧 Use 8-bit quantization with CPU offload
     quantization_config = get_quantization_config()
-    device_map = get_device_map()
-    print(f"🔍 Debug: Loading with 8-bit quantization + explicit device_map...")
+    max_memory = {0: "3.5GiB", "cpu": "32GiB"}  # 🔧 More generous CPU memory
+    print(f"🔍 Debug: Loading with 8-bit quantization + device_map='auto'...")
     
     base_model = AutoModelForCausalLM.from_pretrained(
         model_name,
         quantization_config=quantization_config,
-        device_map=device_map,  # 🔧 CHANGED: Use explicit device_map instead of 'auto'
+        device_map="auto",
+        max_memory=max_memory,  # 🔧 ADDED: Explicit memory limits
         trust_remote_code=True
     )
     
