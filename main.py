@@ -9,20 +9,48 @@ import os
 import json
 import signal
 
+# ============================================================================
+# CRITICAL FIX: Monkeypatch signal module for Windows compatibility
+# This MUST be done before any other imports (datasets, multiprocess, etc.)
+# ============================================================================
+
+# 1. Add signal constants that don't exist on Windows
+if not hasattr(signal, 'SIGALRM'):
+    signal.SIGALRM = 14
+if not hasattr(signal, 'SIGCHLD'):
+    signal.SIGCHLD = 17
+if not hasattr(signal, 'SIGUSR1'):
+    signal.SIGUSR1 = 10
+if not hasattr(signal, 'SIGUSR2'):
+    signal.SIGUSR2 = 12
+
+# 2. Monkeypatch signal.signal() to safely handle unsupported signals on Windows
+_original_signal_signal = signal.signal
+
+def _safe_signal_handler(sig, handler):
+    """
+    Safe wrapper for signal.signal() that ignores unsupported signals on Windows.
+    """
+    try:
+        # Try to register the signal normally
+        return _original_signal_signal(sig, handler)
+    except (ValueError, OSError, AttributeError, TypeError) as e:
+        # If signal is not supported on this platform (e.g., SIGALRM on Windows),
+        # silently ignore and return None
+        if sig in (signal.SIGALRM, signal.SIGCHLD, signal.SIGUSR1, signal.SIGUSR2):
+            # These are expected to fail on Windows, so silently ignore
+            return None
+        else:
+            # Unexpected error, re-raise it
+            raise
+
+# Replace the original signal.signal with our safe version
+signal.signal = _safe_signal_handler
+
 # Configure HuggingFace Hub environment BEFORE importing anything else
 os.environ['HF_HUB_DISABLE_SYMLINKS_WARNING'] = '1'
 
-# Fix for Windows multiprocess signal handling issue
-# multiprocess library tries to use signal constants that don't exist on Windows
-if not hasattr(signal, 'SIGALRM'):
-    signal.SIGALRM = 14  # Unix SIGALRM number (harmless on Windows)
-if not hasattr(signal, 'SIGCHLD'):
-    signal.SIGCHLD = 17  # Unix SIGCHLD number
-if not hasattr(signal, 'SIGUSR1'):
-    signal.SIGUSR1 = 10  # Unix SIGUSR1 number
-if not hasattr(signal, 'SIGUSR2'):
-    signal.SIGUSR2 = 12  # Unix SIGUSR2 number
-
+# NOW it's safe to import everything else
 from data_loader import load_all_datasets
 from model_evaluator import evaluate_baseline_model, evaluate_lora_model
 from utils import (
