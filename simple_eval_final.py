@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Ultra-Simple LoRA Evaluation Script - FINAL WORKING VERSION
-Removing device_map completely to avoid accelerate .to() calls
+Using device_map='cuda' for 4-bit quantized models
 
 Usage:
     python simple_eval_final.py
@@ -29,7 +29,7 @@ def save_log():
     print(f"\n\n📋 Log saved to: {log_file}")
 
 log_print("\n" + "="*80)
-log_print("🚀 Simple LoRA Evaluation - FINAL VERSION (NO device_map)")
+log_print("🚀 Simple LoRA Evaluation - FINAL VERSION (device_map='cuda')")
 log_print("="*80)
 log_print(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 log_print(f"Python version: {sys.version}")
@@ -102,31 +102,22 @@ def main():
         log_print("✅ Quantization config created successfully")
         
         # Step 2: Load base model
-        # CRITICAL FIX: Do NOT use device_map at all!
-        # device_map triggers accelerate which calls .to() on quantized models
+        # FIX: Use device_map="cuda" (not "cuda:0" or "auto")
         log_print("\n[STEP 2/5] Loading base model...")
         log_print(f"   Model: {base_model}")
-        log_print(f"   Method: Load without device_map (quantization handles device)")
+        log_print(f"   device_map: 'cuda'  <-- Correct for 4-bit quantization")
         log_print(f"   Trust remote code: True")
         log_print(f"   (This may take 2-3 minutes on first run)")
         
-        # Load without device_map - quantization automatically handles device placement
         base_model_obj = AutoModelForCausalLM.from_pretrained(
             base_model,
             quantization_config=quantization_config,
-            trust_remote_code=True,
-            # NO device_map parameter!
+            device_map="cuda",  # <-- CORRECT: Use 'cuda' not 'cuda:0' or 'auto'
+            trust_remote_code=True
         )
         log_print("✅ Base model loaded successfully")
         log_print(f"   Model type: {type(base_model_obj).__name__}")
         log_print(f"   Model dtype: {base_model_obj.dtype}")
-        
-        # Check if model is on GPU
-        try:
-            model_device = next(base_model_obj.parameters()).device
-            log_print(f"   Model device: {model_device}")
-        except:
-            log_print(f"   Model device: (quantized model)")
         
         # Step 3: Load tokenizer
         log_print("\n[STEP 3/5] Loading tokenizer...")
@@ -162,7 +153,7 @@ def main():
         inputs = tokenizer(prompt, return_tensors="pt", padding=True)
         log_print(f"   ✅ Input IDs shape: {inputs['input_ids'].shape}")
         
-        # Move inputs to model's device (GPU)
+        # Move inputs to GPU
         log_print(f"   Moving inputs to GPU...")
         inputs = {k: v.to('cuda') for k, v in inputs.items()}
         log_print(f"   ✅ Inputs moved to CUDA")
