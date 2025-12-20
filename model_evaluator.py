@@ -1,7 +1,7 @@
 """
 Model evaluator module for comparing baseline and LoRA-tuned models
 Implements inference and performance measurement
-Uses half precision (fp16) with automatic memory management
+Uses 8-bit quantization for minimal memory usage
 """
 
 import re
@@ -9,7 +9,7 @@ import time
 import torch
 import gc
 from typing import Dict, List, Any
-from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig, BitsAndBytesConfig
 from peft import get_peft_model, LoraConfig, prepare_model_for_kbit_training
 from config import GENERATION_CONFIG, DEVICE, TIMEOUT_SECONDS
 
@@ -81,34 +81,44 @@ def extract_answer(response: str) -> str:
     return ""
 
 
+def get_quantization_config():
+    """Create 8-bit quantization config for memory efficiency"""
+    return BitsAndBytesConfig(
+        load_in_8bit=True,
+        bnb_8bit_compute_dtype=torch.float16,
+        bnb_8bit_use_double_quant=True,
+        bnb_8bit_quant_type="nf4"
+    )
+
+
 def evaluate_baseline_model(
     model_name: str,
     datasets_dict: Dict[str, Dict[str, List]]
 ) -> Dict[str, Dict[str, Any]]:
     """
     Evaluate baseline model (untuned) on all datasets
+    Uses 8-bit quantization for memory efficiency
     """
     print(f"Loading baseline model: {model_name}")
-    print(f"Using half precision (fp16) with automatic memory management...")
+    print(f"Using 8-bit quantization with automatic memory management...")
 
-    config = AutoConfig.from_pretrained(model_name, trust_remote_code=True)
-    
-    # 🔧 Use fp16 (half precision) to save 50% memory
-    print(f"🔍 Debug: Loading with device_map='auto', torch_dtype=float16...")
+    # 🔧 Use 8-bit quantization for ~4GB memory usage
+    quantization_config = get_quantization_config()
+    print(f"🔍 Debug: Loading with 8-bit quantization, device_map='auto'...")
     
     base_model = AutoModelForCausalLM.from_pretrained(
         model_name,
-        config=config,
-        device_map="auto",  # Automatic GPU/CPU memory management
-        torch_dtype=torch.float16,  # 🔧 CHANGED: Use half precision (fp16) instead of float32
+        quantization_config=quantization_config,
+        device_map="auto",
         trust_remote_code=True
     )
     
-    print(f"✅ Model dtype after loading: {base_model.dtype}")
+    print(f"✅ Model loaded with 8-bit quantization")
+    print(f"✅ Model dtype: {base_model.dtype}")
     
     tokenizer_base = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
     tokenizer_base.pad_token = tokenizer_base.eos_token
-    print(f"✅ Baseline model loaded with device_map='auto' (half precision fp16)")
+    print(f"✅ Baseline model ready for inference")
     
     print_device_info()
     
@@ -135,7 +145,7 @@ def evaluate_baseline_model(
                     outputs = base_model.generate(
                         input_ids=input_ids,
                         attention_mask=attention_mask,
-                        max_new_tokens=256,  # Use max_new_tokens instead of max_length
+                        max_new_tokens=256,
                         do_sample=False,
                         pad_token_id=tokenizer_base.eos_token_id
                     )
@@ -203,32 +213,31 @@ def evaluate_lora_model(
 ) -> Dict[str, Dict[str, Any]]:
     """
     Evaluate LoRA-tuned model on all datasets
+    Uses 8-bit quantization for memory efficiency
     """
     print(f"Loading base model for LoRA: {model_name}")
-    print(f"Using half precision (fp16) with automatic memory management...")
+    print(f"Using 8-bit quantization with automatic memory management...")
 
-    config = AutoConfig.from_pretrained(model_name, trust_remote_code=True)
-    
-    # 🔧 Use fp16 (half precision) to save 50% memory
-    print(f"🔍 Debug: Loading with device_map='auto', torch_dtype=float16...")
+    # 🔧 Use 8-bit quantization for ~4GB memory usage
+    quantization_config = get_quantization_config()
+    print(f"🔍 Debug: Loading with 8-bit quantization, device_map='auto'...")
     
     base_model = AutoModelForCausalLM.from_pretrained(
         model_name,
-        config=config,
-        device_map="auto",  # Automatic GPU/CPU memory management
-        torch_dtype=torch.float16,  # 🔧 CHANGED: Use half precision (fp16) instead of float32
+        quantization_config=quantization_config,
+        device_map="auto",
         trust_remote_code=True
     )
     
-    print(f"✅ Model dtype after loading: {base_model.dtype}")
+    print(f"✅ Model loaded with 8-bit quantization")
+    print(f"✅ Model dtype: {base_model.dtype}")
     
     tokenizer_base = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
     tokenizer_base.pad_token = tokenizer_base.eos_token
-    print(f"✅ LoRA base model loaded with device_map='auto' (half precision fp16)")
+    print(f"✅ LoRA base model ready for configuration")
 
-    print("Preparing model for training...")
-    # Note: prepare_model_for_kbit_training is for quantized models
-    # For fp16, we skip this step
+    print("Preparing model for LoRA training...")
+    base_model = prepare_model_for_kbit_training(base_model)
     print("✅ Model preparation complete.")
     
     print_device_info()
@@ -271,7 +280,7 @@ def evaluate_lora_model(
                     outputs = lora_model.generate(
                         input_ids=input_ids,
                         attention_mask=attention_mask,
-                        max_new_tokens=256,  # Use max_new_tokens instead of max_length
+                        max_new_tokens=256,
                         do_sample=False,
                         pad_token_id=tokenizer_base.eos_token_id
                     )
