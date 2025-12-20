@@ -58,17 +58,29 @@ def print_device_info():
 
 def extract_answer(response: str) -> str:
     """
-    Extract numerical answer from model response text
-    Uses regex to find the final numeric answer
+    Extract numerical answer or option letter (A-E) from model response text
+    Uses regex to find the final answer
     
     Args:
         response (str): Model generated text response
         
     Returns:
-        answer (str): Extracted numeric answer string
+        answer (str): Extracted numeric answer string or option letter
     """
-    # Try multiple patterns to extract answers
+    # Remove the input prompt from the response if possible to avoid extracting from question
+    # This is handled partially by skip_special_tokens=True and decoding only new tokens if needed
+    # But here we get full text usually. 
+    # Strategy: Look for the LAST matching pattern in the text
+    
+    # Combined patterns for numbers and options (A-E)
     patterns = [
+        # Options A-E patterns
+        r"answer is\s*([A-E])",
+        r"option\s*([A-E])",
+        r"^([A-E])\.",
+        r"\b([A-E])\b\s*$",  # Just the letter at the end
+        
+        # Numeric patterns
         r"answer[:]?\s*(-?\d+)",
         r"=\s*(-?\d+)",
         r"is\s*(-?\d+)",
@@ -76,13 +88,20 @@ def extract_answer(response: str) -> str:
         r"(-?\d+)$"
     ]
     
-    for pattern in patterns:
-        match = re.search(pattern, response, re.IGNORECASE)
-        if match:
-            return match.group(1)
+    # Iterate through patterns and try to find the last match in the text
+    # Finding the LAST match is crucial because intermediate reasoning might contain numbers
+    final_answer = ""
     
-    # If no number found, return empty string
-    return ""
+    for pattern in patterns:
+        matches = list(re.finditer(pattern, response, re.IGNORECASE))
+        if matches:
+            # Get the last match
+            final_answer = matches[-1].group(1)
+            # If we found a strong match like "answer is X", prefer that over others
+            if "answer" in pattern or "option" in pattern:
+                return final_answer
+    
+    return final_answer
 
 
 def evaluate_baseline_model(
@@ -153,8 +172,8 @@ def evaluate_baseline_model(
             try:
                 # [BREAKPOINT_1] - Model Inference
                 # Description: Execute model inference with optimized prompt
-                # OPTIMIZED: Shorter prompt to encourage concise answers
-                prompt = f"Question: {question}\nAnswer: "
+                # OPTIMIZED: Use Phi-3 standard chat format to prevent question repetition
+                prompt = f"<|user|>\n{question}<|end|>\n<|assistant|>\n"
                 inputs = tokenizer_base(prompt, return_tensors="pt", truncation=True, max_length=512)
                 input_ids = inputs["input_ids"].to(DEVICE)
                 attention_mask = inputs["attention_mask"].to(DEVICE)
@@ -167,7 +186,10 @@ def evaluate_baseline_model(
                         do_sample=False,                 # Greedy decoding for deterministic output
                         pad_token_id=tokenizer_base.eos_token_id
                     )
-                response = tokenizer_base.decode(outputs[0], skip_special_tokens=True)
+                # Only decode the NEW tokens to avoid including the prompt in the response
+                # This makes extraction much easier
+                generated_tokens = outputs[0][len(input_ids[0]):]
+                response = tokenizer_base.decode(generated_tokens, skip_special_tokens=True)
                 
                 # [BREAKPOINT_2] - Answer Extraction and Comparison
                 # Description: Extract final numeric answer using regex and compare with ground truth
@@ -301,8 +323,8 @@ def evaluate_lora_model(
             try:
                 # [BREAKPOINT_5] - LoRA Model Inference
                 # Description: Execute inference with LoRA-tuned model
-                # OPTIMIZED: Shorter prompt to encourage concise answers
-                prompt = f"Question: {question}\nAnswer: "
+                # OPTIMIZED: Use Phi-3 standard chat format to prevent question repetition
+                prompt = f"<|user|>\n{question}<|end|>\n<|assistant|>\n"
                 inputs = tokenizer_base(prompt, return_tensors="pt", truncation=True, max_length=512)
                 input_ids = inputs["input_ids"].to(DEVICE)
                 attention_mask = inputs["attention_mask"].to(DEVICE)
@@ -315,7 +337,9 @@ def evaluate_lora_model(
                         do_sample=False,                 # Greedy decoding for deterministic output
                         pad_token_id=tokenizer_base.eos_token_id
                     )
-                response = tokenizer_base.decode(outputs[0], skip_special_tokens=True)
+                # Only decode the NEW tokens to avoid including the prompt in the response
+                generated_tokens = outputs[0][len(input_ids[0]):]
+                response = tokenizer_base.decode(generated_tokens, skip_special_tokens=True)
                 
                 # [BREAKPOINT_6] - Answer Extraction and Accuracy Calculation
                 # Description: Extract final numeric answer and calculate accuracy
