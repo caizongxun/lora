@@ -208,7 +208,8 @@ class ColabLoRAEvaluator:
                 
                 if ground_truth in response or ground_truth == response:
                     correct += 1
-            except:
+            except Exception as e:
+                # Silently skip errors on individual samples
                 pass
         
         return correct / total if total > 0 else 0
@@ -254,7 +255,8 @@ class ColabLoRAEvaluator:
                 
                 if ground_truth.lower() in response:
                     correct += 1
-            except:
+            except Exception as e:
+                # Silently skip errors on individual samples
                 pass
         
         return correct / total if total > 0 else 0
@@ -290,7 +292,8 @@ class ColabLoRAEvaluator:
                 
                 if ground_truth in response:
                     correct += 1
-            except:
+            except Exception as e:
+                # Silently skip errors on individual samples
                 pass
         
         return correct / total if total > 0 else 0
@@ -449,29 +452,39 @@ def main():
         save_to_drive=True
     )
     
-    # Setup models
-    evaluator.setup_models()
-    
-    # Load datasets
-    datasets = evaluator.load_datasets()
-    
-    if not datasets:
-        print("❌ No datasets loaded. Exiting.")
-        return
-    
-    # Run evaluation
-    results = evaluator.evaluate(datasets)
-    
-    # Save results
-    evaluator.save_results(results)
-    
-    # Print summary
-    evaluator.print_summary(results)
-    
-    print("\n" + "="*80)
-    print("✅ EVALUATION COMPLETE!")
-    print("="*80)
+    try:
+        # Setup models
+        evaluator.setup_models()
+        
+        # Load datasets
+        datasets = evaluator.load_datasets()
+        
+        if not datasets:
+            print("❌ No datasets loaded. Exiting.")
+            return 1
+        
+        # Run evaluation
+        results = evaluator.evaluate(datasets)
+        
+        # Save results
+        evaluator.save_results(results)
+        
+        # Print summary
+        evaluator.print_summary(results)
+        
+        print("\n" + "="*80)
+        print("✅ EVALUATION COMPLETE!")
+        print("="*80)
+        
+        return 0
+        
+    except Exception as e:
+        print(f"\n❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    exit_code = main()
+    sys.exit(exit_code)
