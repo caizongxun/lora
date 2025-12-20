@@ -30,10 +30,13 @@ DATASET_CONFIG = {
 }
 
 # LoRA Configuration Parameters
+# Note: target_modules must match the actual layer names in Phi-3
+# Phi-3 uses MLP layers (dense_h_to_4h, dense_4h_to_h) and attention qkv_proj
+# NOT q_proj and v_proj (which are used in LLaMA/Mistral)
 LORA_CONFIG = {
     "r": 8,  # LoRA rank - determines the dimensionality of the low-rank adaptation
     "lora_alpha": 16,  # Scaling parameter for LoRA weights
-    "target_modules": ["q_proj", "v_proj"],  # Target linear modules to apply LoRA
+    "target_modules": ["dense_h_to_4h", "dense_4h_to_h", "qkv_proj"],  # Phi-3 MLP and attention layers
     "lora_dropout": 0.1,  # Dropout rate in LoRA layers
     "bias": "none",  # Whether to use bias in LoRA layers
     "task_type": "CAUSAL_LM"  # Task type for language modeling
