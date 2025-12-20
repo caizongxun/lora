@@ -163,7 +163,7 @@ def evaluate_baseline_model(
                     outputs = base_model.generate(
                         input_ids=input_ids,
                         attention_mask=attention_mask,
-                        max_new_tokens=128,              # Reduced from 512 to encourage brief answers
+                        max_new_tokens=512,              # Balanced: enough for complete answer + reasoning
                         do_sample=False,                 # Greedy decoding for deterministic output
                         pad_token_id=tokenizer_base.eos_token_id
                     )
@@ -311,7 +311,7 @@ def evaluate_lora_model(
                     outputs = lora_model.generate(
                         input_ids=input_ids,
                         attention_mask=attention_mask,
-                        max_new_tokens=128,              # Reduced from 512 to encourage brief answers
+                        max_new_tokens=512,              # Balanced: enough for complete answer + reasoning
                         do_sample=False,                 # Greedy decoding for deterministic output
                         pad_token_id=tokenizer_base.eos_token_id
                     )
