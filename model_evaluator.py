@@ -6,6 +6,7 @@ Loads trained LoRA weights from HuggingFace Hub or local checkpoint
 
 KEY UPDATE: Now includes evaluate_lora_model_with_checkpoint() function
             which downloads trained LoRA weights from Hugging Face Hub
+            FIXED: Removed prepare_model_for_kbit_training() calls that caused .to() errors
 """
 
 import re
@@ -308,6 +309,8 @@ def evaluate_lora_model_with_checkpoint(
     Downloads trained LoRA weights from Hugging Face Hub
     Uses 4-bit quantization for minimal GPU memory usage
     
+    FIXED: Removed prepare_model_for_kbit_training() call that caused .to() errors
+    
     Args:
         model_name: Base model name (e.g., "microsoft/Phi-3-mini-4k-instruct")
         hf_model_id: HuggingFace model ID with trained LoRA (e.g., "zongowo111/phi3-lora-gsm8k-commonsense")
@@ -333,9 +336,10 @@ def evaluate_lora_model_with_checkpoint(
     tokenizer_base.pad_token = tokenizer_base.eos_token
     print(f"[SUCCESS] LoRA base model ready")
 
-    print("\nPreparing model for LoRA...")
-    base_model = prepare_model_for_kbit_training(base_model)
-    print("[SUCCESS] Model preparation complete.")
+    # REMOVED: prepare_model_for_kbit_training() call
+    # REASON: Causes .to() error with 4-bit quantized models
+    # NOTE: Model is already prepared via device_map and quantization_config
+    print("[INFO] Model preparation skipped (already 4-bit quantized)")
     
     print_device_info()
     
@@ -486,9 +490,8 @@ def evaluate_lora_model(
     tokenizer_base.pad_token = tokenizer_base.eos_token
     print(f"[SUCCESS] LoRA base model ready for configuration")
 
-    print("Preparing model for LoRA training...")
-    base_model = prepare_model_for_kbit_training(base_model)
-    print("[SUCCESS] Model preparation complete.")
+    # REMOVED: prepare_model_for_kbit_training() call (causes .to() error)
+    print("[INFO] Model preparation skipped (already 4-bit quantized)")
     
     print_device_info()
     
