@@ -3,6 +3,9 @@ Main entry point for LoRA Fine-tuning Evaluation Pipeline
 Orchestrates data loading, model evaluation, and result generation
 With detailed variable inspection at each step
 
+🎯 KEY FIX: Now downloads actual trained LoRA weights from Hugging Face Hub
+           Instead of using random initialization
+
 NOTE: model_evaluator.py now uses 4-bit quantization for memory efficiency
       This allows the pipeline to run on RTX 3050 Ti (4GB VRAM)
 """
@@ -63,7 +66,7 @@ os.environ['HF_HUB_DISABLE_SYMLINKS_WARNING'] = '1'
 
 # NOW it's safe to import everything else
 from data_loader import load_all_datasets
-from model_evaluator import evaluate_baseline_model, evaluate_lora_model
+from model_evaluator import evaluate_baseline_model, evaluate_lora_model_with_checkpoint
 from utils import (
     calculate_comparison_metrics,
     generate_performance_comparison,
@@ -73,7 +76,7 @@ from utils import (
     save_predictions_json,
     generate_evaluation_log
 )
-from config import BASE_MODEL_NAME, LORA_CONFIG, DATASET_CONFIG, OUTPUT_DIR
+from config import BASE_MODEL_NAME, LORA_CONFIG, DATASET_CONFIG, OUTPUT_DIR, HF_MODEL_ID
 
 
 def print_step_header(step_num, step_name):
@@ -128,6 +131,7 @@ def main():
     print(" "*15 + "With Step-by-Step Variable Inspection")
     print("="*80)
     print("📌 Using 4-bit quantization for memory efficiency (RTX 3050 Ti compatible)")
+    print(f"📍 LoRA Model ID: {HF_MODEL_ID}")
     print("")
     
     try:
@@ -194,12 +198,16 @@ def main():
         print("")
         
         # STEP 3: Evaluate LoRA Model
-        # 🔧 Uses 4-bit quantization in model_evaluator.py
+        # 🎯 NOW DOWNLOADS ACTUAL TRAINED WEIGHTS FROM HF HUB
         print_step_header(3, "Evaluating LoRA fine-tuned model")
         print("-"*80)
-        lora_results = evaluate_lora_model(
+        print(f"\n🔄 Downloading LoRA weights from Hugging Face Hub...")
+        print(f"   Repository: {HF_MODEL_ID}")
+        print(f"   (This may take a few seconds on first run)\n")
+        
+        lora_results = evaluate_lora_model_with_checkpoint(
             model_name=BASE_MODEL_NAME,
-            lora_config_dict=LORA_CONFIG,
+            hf_model_id=HF_MODEL_ID,  # 🎯 Pass the HF model ID to download weights
             datasets_dict=datasets_dict
         )  # Results for LoRA model (dict[str, dict])
         print("")
