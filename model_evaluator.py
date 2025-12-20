@@ -1,7 +1,7 @@
 """
 Model evaluator module for comparing baseline and LoRA-tuned models
 Implements inference and performance measurement
-Uses full precision with automatic memory management
+Uses half precision (fp16) with automatic memory management
 """
 
 import re
@@ -89,19 +89,18 @@ def evaluate_baseline_model(
     Evaluate baseline model (untuned) on all datasets
     """
     print(f"Loading baseline model: {model_name}")
-    print(f"Using full precision with automatic memory management...")
+    print(f"Using half precision (fp16) with automatic memory management...")
 
     config = AutoConfig.from_pretrained(model_name, trust_remote_code=True)
     
-    # 🔧 Use full precision without quantization
-    # device_map='auto' handles CPU offloading automatically
-    print(f"🔍 Debug: Loading with device_map='auto' (no quantization)...")
+    # 🔧 Use fp16 (half precision) to save 50% memory
+    print(f"🔍 Debug: Loading with device_map='auto', torch_dtype=float16...")
     
     base_model = AutoModelForCausalLM.from_pretrained(
         model_name,
         config=config,
         device_map="auto",  # Automatic GPU/CPU memory management
-        torch_dtype=torch.float32,  # Full precision
+        torch_dtype=torch.float16,  # 🔧 CHANGED: Use half precision (fp16) instead of float32
         trust_remote_code=True
     )
     
@@ -109,7 +108,7 @@ def evaluate_baseline_model(
     
     tokenizer_base = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
     tokenizer_base.pad_token = tokenizer_base.eos_token
-    print(f"✅ Baseline model loaded with device_map='auto' (full precision)")
+    print(f"✅ Baseline model loaded with device_map='auto' (half precision fp16)")
     
     print_device_info()
     
@@ -136,7 +135,7 @@ def evaluate_baseline_model(
                     outputs = base_model.generate(
                         input_ids=input_ids,
                         attention_mask=attention_mask,
-                        max_new_tokens=512,
+                        max_new_tokens=256,  # Use max_new_tokens instead of max_length
                         do_sample=False,
                         pad_token_id=tokenizer_base.eos_token_id
                     )
@@ -206,18 +205,18 @@ def evaluate_lora_model(
     Evaluate LoRA-tuned model on all datasets
     """
     print(f"Loading base model for LoRA: {model_name}")
-    print(f"Using full precision with automatic memory management...")
+    print(f"Using half precision (fp16) with automatic memory management...")
 
     config = AutoConfig.from_pretrained(model_name, trust_remote_code=True)
     
-    # 🔧 Use full precision without quantization
-    print(f"🔍 Debug: Loading with device_map='auto' (no quantization)...")
+    # 🔧 Use fp16 (half precision) to save 50% memory
+    print(f"🔍 Debug: Loading with device_map='auto', torch_dtype=float16...")
     
     base_model = AutoModelForCausalLM.from_pretrained(
         model_name,
         config=config,
         device_map="auto",  # Automatic GPU/CPU memory management
-        torch_dtype=torch.float32,  # Full precision
+        torch_dtype=torch.float16,  # 🔧 CHANGED: Use half precision (fp16) instead of float32
         trust_remote_code=True
     )
     
@@ -225,11 +224,11 @@ def evaluate_lora_model(
     
     tokenizer_base = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
     tokenizer_base.pad_token = tokenizer_base.eos_token
-    print(f"✅ LoRA base model loaded with device_map='auto' (full precision)")
+    print(f"✅ LoRA base model loaded with device_map='auto' (half precision fp16)")
 
     print("Preparing model for training...")
-    # Note: prepare_model_for_kbit_training is designed for quantized models
-    # For full precision, we skip this step
+    # Note: prepare_model_for_kbit_training is for quantized models
+    # For fp16, we skip this step
     print("✅ Model preparation complete.")
     
     print_device_info()
@@ -272,7 +271,7 @@ def evaluate_lora_model(
                     outputs = lora_model.generate(
                         input_ids=input_ids,
                         attention_mask=attention_mask,
-                        max_new_tokens=512,
+                        max_new_tokens=256,  # Use max_new_tokens instead of max_length
                         do_sample=False,
                         pad_token_id=tokenizer_base.eos_token_id
                     )
