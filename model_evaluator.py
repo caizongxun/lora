@@ -13,6 +13,7 @@ import time
 import torch
 import gc
 import os
+import json
 from typing import Dict, List, Any
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig, BitsAndBytesConfig
 from peft import get_peft_model, LoraConfig, prepare_model_for_kbit_training, PeftModel
@@ -94,6 +95,85 @@ def get_quantization_config():
         bnb_4bit_use_double_quant=True,
         bnb_4bit_quant_type="nf4"
     )
+
+
+def load_lora_with_compatibility(base_model, hf_model_id: str):
+    """
+    Load LoRA weights with version compatibility handling.
+    Filters out unknown parameters that may cause errors.
+    
+    Args:
+        base_model: The base model to attach LoRA to
+        hf_model_id: HuggingFace model ID with trained LoRA
+    
+    Returns:
+        Model with LoRA weights loaded
+    """
+    try:
+        print(f"[INFO] Attempting to load LoRA weights from: {hf_model_id}")
+        
+        # First try normal loading
+        lora_model = PeftModel.from_pretrained(
+            base_model,
+            hf_model_id,
+            is_trainable=False
+        )
+        print(f"[SUCCESS] LoRA weights loaded successfully")
+        return lora_model
+        
+    except TypeError as e:
+        if "alora_invocation_tokens" in str(e) or "unexpected keyword argument" in str(e):
+            print(f"[INFO] Detected PEFT version mismatch, attempting compatible loading...")
+            
+            # Load and filter adapter config
+            from huggingface_hub import hf_hub_download
+            config_path = hf_hub_download(
+                repo_id=hf_model_id,
+                filename="adapter_config.json"
+            )
+            
+            with open(config_path, 'r') as f:
+                adapter_config = json.load(f)
+            
+            # Remove unknown parameters
+            unknown_params = ["alora_invocation_tokens", "layer_replication"]
+            for param in unknown_params:
+                if param in adapter_config:
+                    print(f"[INFO] Removing unsupported parameter: {param}")
+                    del adapter_config[param]
+            
+            # Create LoRA config from filtered config
+            print(f"[INFO] Creating LoRA config with filtered parameters...")
+            lora_config = LoraConfig(
+                r=adapter_config.get("r", 8),
+                lora_alpha=adapter_config.get("lora_alpha", 8),
+                target_modules=adapter_config.get("target_modules", []),
+                lora_dropout=adapter_config.get("lora_dropout", 0.1),
+                bias=adapter_config.get("bias", "none"),
+                task_type=adapter_config.get("task_type", "CAUSAL_LM")
+            )
+            
+            # Attach LoRA config
+            lora_model = get_peft_model(base_model, lora_config)
+            
+            # Load weights manually
+            print(f"[INFO] Loading weights from checkpoint...")
+            from peft.utils import WEIGHTS_NAME
+            from safetensors.torch import load_file
+            from huggingface_hub import hf_hub_download
+            
+            weights_path = hf_hub_download(
+                repo_id=hf_model_id,
+                filename="adapter_model.safetensors"
+            )
+            
+            weights = load_file(weights_path)
+            lora_model.load_state_dict(weights, strict=False)
+            
+            print(f"[SUCCESS] LoRA weights loaded with compatibility handling")
+            return lora_model
+        else:
+            raise
 
 
 def evaluate_baseline_model(
@@ -252,18 +332,14 @@ def evaluate_lora_model_with_checkpoint(
     
     print_device_info()
     
-    # CRITICAL: Load trained LoRA weights from HuggingFace Hub
+    # CRITICAL: Load trained LoRA weights from HuggingFace Hub with compatibility handling
     print(f"\n[INFO] Downloading trained LoRA weights from Hugging Face Hub...")
     print(f"       Repository: {hf_model_id}")
     print(f"       (This may take a few seconds on first run)")
     
     try:
-        # Load the trained LoRA weights from HF Hub
-        lora_model = PeftModel.from_pretrained(
-            base_model,
-            hf_model_id,
-            is_trainable=False  # Set to False for inference only
-        )
+        # Use the safe loading function
+        lora_model = load_lora_with_compatibility(base_model, hf_model_id)
         print(f"\n[SUCCESS] Successfully downloaded and loaded LoRA weights from HF Hub!")
         print(f"[SUCCESS] Using TRAINED LoRA adapters (not random initialization)")
         print(f"[SUCCESS] Model is now ready for evaluation")
