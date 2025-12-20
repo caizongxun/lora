@@ -9,7 +9,7 @@ import time
 import torch
 import gc
 from typing import Dict, List, Any
-from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig, BitsAndBytesConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig, BitsAndBytesConfig, StoppingCriteria, StoppingCriteriaList
 from peft import get_peft_model, LoraConfig
 from config import GENERATION_CONFIG, DEVICE, TIMEOUT_SECONDS
 
@@ -20,6 +20,20 @@ QUANTIZATION_CONFIG = BitsAndBytesConfig(
     bnb_8bit_use_double_quant=True,
     bnb_8bit_compute_dtype=torch.bfloat16
 )
+
+
+class StopOnToken(StoppingCriteria):
+    """
+    Stop generation when specific tokens are encountered
+    """
+    def __init__(self, stop_ids, tokenizer):
+        self.stop_ids = stop_ids
+        self.tokenizer = tokenizer
+    
+    def __call__(self, input_ids, scores, **kwargs):
+        if input_ids[0][-1] in self.stop_ids:
+            return True
+        return False
 
 
 def print_device_info():
@@ -138,9 +152,9 @@ def evaluate_baseline_model(
         for idx, question in enumerate(questions_list):
             try:
                 # [BREAKPOINT_1] - Model Inference
-                # Description: Execute model inference with tokenized input and generate output
-                # FIXED: Add prompt template to guide model behavior (Chain-of-Thought)
-                prompt = f"Instruct: {question}\nOutput: Let's think step by step."
+                # Description: Execute model inference with optimized prompt
+                # OPTIMIZED: Shorter prompt to encourage concise answers
+                prompt = f"Question: {question}\nAnswer: "
                 inputs = tokenizer_base(prompt, return_tensors="pt", truncation=True, max_length=512)
                 input_ids = inputs["input_ids"].to(DEVICE)
                 attention_mask = inputs["attention_mask"].to(DEVICE)
@@ -149,7 +163,7 @@ def evaluate_baseline_model(
                     outputs = base_model.generate(
                         input_ids=input_ids,
                         attention_mask=attention_mask,
-                        max_new_tokens=512,              # INCREASED from 256 to 512 for complete reasoning
+                        max_new_tokens=128,              # Reduced from 512 to encourage brief answers
                         do_sample=False,                 # Greedy decoding for deterministic output
                         pad_token_id=tokenizer_base.eos_token_id
                     )
@@ -287,8 +301,8 @@ def evaluate_lora_model(
             try:
                 # [BREAKPOINT_5] - LoRA Model Inference
                 # Description: Execute inference with LoRA-tuned model
-                # FIXED: Add prompt template to guide model behavior (Chain-of-Thought)
-                prompt = f"Instruct: {question}\nOutput: Let's think step by step."
+                # OPTIMIZED: Shorter prompt to encourage concise answers
+                prompt = f"Question: {question}\nAnswer: "
                 inputs = tokenizer_base(prompt, return_tensors="pt", truncation=True, max_length=512)
                 input_ids = inputs["input_ids"].to(DEVICE)
                 attention_mask = inputs["attention_mask"].to(DEVICE)
@@ -297,7 +311,7 @@ def evaluate_lora_model(
                     outputs = lora_model.generate(
                         input_ids=input_ids,
                         attention_mask=attention_mask,
-                        max_new_tokens=512,              # INCREASED from 256 to 512 for complete reasoning
+                        max_new_tokens=128,              # Reduced from 512 to encourage brief answers
                         do_sample=False,                 # Greedy decoding for deterministic output
                         pad_token_id=tokenizer_base.eos_token_id
                     )
