@@ -42,6 +42,13 @@ LORA_CONFIG = {
     "task_type": "CAUSAL_LM"  # Task type for language modeling
 }
 
+# 🔧 LoRA Checkpoint Configuration
+# Specify the directory where trained LoRA weights are saved
+LORA_CHECKPOINT_DIR = "./lora_checkpoint"  # Directory containing adapter_model.bin and adapter_config.json
+# For Colab, you can change this to:
+# LORA_CHECKPOINT_DIR = "/content/drive/MyDrive/lora_checkpoint"  # If using Google Drive
+# Or just update it dynamically in your notebook before running evaluation
+
 # Model Generation Parameters
 # 🔧 IMPROVED: Changed to greedy decoding with lower temperature for more stable outputs
 GENERATION_CONFIG = {
