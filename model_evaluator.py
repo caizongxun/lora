@@ -95,8 +95,9 @@ def evaluate_baseline_model(
             try:
                 # [BREAKPOINT_1] - Model Inference
                 # Description: Execute model inference with tokenized input and generate output
-                # FIXED: Explicit input_ids and attention_mask to prevent degeneration
-                inputs = tokenizer_base(question, return_tensors="pt", truncation=True, max_length=512)
+                # FIXED: Add prompt template to guide model behavior (Chain-of-Thought)
+                prompt = f"Instruct: {question}\nOutput: Let's think step by step."
+                inputs = tokenizer_base(prompt, return_tensors="pt", truncation=True, max_length=512)
                 input_ids = inputs["input_ids"].to(DEVICE)
                 attention_mask = inputs["attention_mask"].to(DEVICE)
                 
@@ -227,8 +228,9 @@ def evaluate_lora_model(
             try:
                 # [BREAKPOINT_5] - LoRA Model Inference
                 # Description: Execute inference with LoRA-tuned model
-                # FIXED: Explicit input_ids and attention_mask to prevent degeneration
-                inputs = tokenizer_base(question, return_tensors="pt", truncation=True, max_length=512)
+                # FIXED: Add prompt template to guide model behavior (Chain-of-Thought)
+                prompt = f"Instruct: {question}\nOutput: Let's think step by step."
+                inputs = tokenizer_base(prompt, return_tensors="pt", truncation=True, max_length=512)
                 input_ids = inputs["input_ids"].to(DEVICE)
                 attention_mask = inputs["attention_mask"].to(DEVICE)
                 
