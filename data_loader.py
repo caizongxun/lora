@@ -3,6 +3,18 @@ Data loader module for loading evaluation datasets
 Handles GSM8K, CommonsenseQA, and SVAMP datasets
 """
 
+# FIX: Patch signal module BEFORE importing datasets to avoid multiprocess Windows bug
+import signal
+
+if not hasattr(signal, 'SIGALRM'):
+    signal.SIGALRM = 14
+if not hasattr(signal, 'SIGCHLD'):
+    signal.SIGCHLD = 17
+if not hasattr(signal, 'SIGUSR1'):
+    signal.SIGUSR1 = 10
+if not hasattr(signal, 'SIGUSR2'):
+    signal.SIGUSR2 = 12
+
 import re
 from datasets import load_dataset
 from typing import Tuple, List, Any
