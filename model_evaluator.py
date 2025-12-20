@@ -114,6 +114,18 @@ def evaluate_baseline_model(
                 extracted_answer = extract_answer(response)  # Returns string
                 predictions.append(extracted_answer)
                 
+                # DEBUG: Print first 3 samples to inspect model output
+                if idx < 3:
+                    print(f"\n{'='*80}")
+                    print(f"[BASELINE] Debug Sample {idx} - {dataset_name}")
+                    print(f"{'='*80}")
+                    print(f"Question: {question[:200]}..." if len(question) > 200 else f"Question: {question}")
+                    print(f"\nModel Response: {response[:500]}..." if len(response) > 500 else f"\nModel Response: {response}")
+                    print(f"\nExtracted Answer: '{extracted_answer}'")
+                    print(f"Ground Truth: '{ground_truth_answers[idx]}'")
+                    print(f"Match: {'✅ YES' if extracted_answer == ground_truth_answers[idx] else '❌ NO'}")
+                    print(f"{'='*80}\n")
+                
                 # Compare extracted answer with ground truth
                 is_correct = (extracted_answer == ground_truth_answers[idx])
                 if is_correct:
@@ -225,6 +237,18 @@ def evaluate_lora_model(
                 # Description: Extract final numeric answer and calculate accuracy
                 extracted_answer = extract_answer(response)  # Returns string
                 predictions.append(extracted_answer)
+                
+                # DEBUG: Print first 3 samples to inspect model output
+                if idx < 3:
+                    print(f"\n{'='*80}")
+                    print(f"[LoRA] Debug Sample {idx} - {dataset_name}")
+                    print(f"{'='*80}")
+                    print(f"Question: {question[:200]}..." if len(question) > 200 else f"Question: {question}")
+                    print(f"\nModel Response: {response[:500]}..." if len(response) > 500 else f"\nModel Response: {response}")
+                    print(f"\nExtracted Answer: '{extracted_answer}'")
+                    print(f"Ground Truth: '{ground_truth_answers[idx]}'")
+                    print(f"Match: {'✅ YES' if extracted_answer == ground_truth_answers[idx] else '❌ NO'}")
+                    print(f"{'='*80}\n")
                 
                 # Compare extracted answer with ground truth
                 is_correct = (extracted_answer == ground_truth_answers[idx])
