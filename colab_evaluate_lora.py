@@ -189,11 +189,14 @@ class ColabLoRAEvaluator:
                 
                 prompt = f"<|user|>\n{question}<|end|>\n<|assistant|>\n"
                 inputs = self.tokenizer(prompt, return_tensors="pt", padding=True)
-                inputs = {k: v.to(model.device) for k, v in inputs.items()}
+                # FIXED: Do NOT call .to() on 4-bit quantized models
+                # The model is already on the correct device via device_map="auto"
+                # Calling .to() will raise: ValueError: `.to` is not supported for `4-bit` or `8-bit` bitsandbytes models
                 
                 with torch.no_grad():
                     outputs = model.generate(
-                        **inputs,
+                        input_ids=inputs["input_ids"],
+                        attention_mask=inputs.get("attention_mask"),
                         max_length=256,
                         num_beams=1,
                         temperature=0.7,
@@ -232,11 +235,14 @@ class ColabLoRAEvaluator:
                 
                 prompt = f"<|user|>\n{question}\nChoices: {', '.join(choices)}<|end|>\n<|assistant|>\n"
                 inputs = self.tokenizer(prompt, return_tensors="pt", padding=True)
-                inputs = {k: v.to(model.device) for k, v in inputs.items()}
+                # FIXED: Do NOT call .to() on 4-bit quantized models
+                # The model is already on the correct device via device_map="auto"
+                # Calling .to() will raise: ValueError: `.to` is not supported for `4-bit` or `8-bit` bitsandbytes models
                 
                 with torch.no_grad():
                     outputs = model.generate(
-                        **inputs,
+                        input_ids=inputs["input_ids"],
+                        attention_mask=inputs.get("attention_mask"),
                         max_length=128,
                         num_beams=1,
                         temperature=0.7,
@@ -265,11 +271,14 @@ class ColabLoRAEvaluator:
                 
                 prompt = f"<|user|>\n{question}<|end|>\n<|assistant|>\n"
                 inputs = self.tokenizer(prompt, return_tensors="pt", padding=True)
-                inputs = {k: v.to(model.device) for k, v in inputs.items()}
+                # FIXED: Do NOT call .to() on 4-bit quantized models
+                # The model is already on the correct device via device_map="auto"
+                # Calling .to() will raise: ValueError: `.to` is not supported for `4-bit` or `8-bit` bitsandbytes models
                 
                 with torch.no_grad():
                     outputs = model.generate(
-                        **inputs,
+                        input_ids=inputs["input_ids"],
+                        attention_mask=inputs.get("attention_mask"),
                         max_length=128,
                         num_beams=1,
                         temperature=0.7,
