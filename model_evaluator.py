@@ -8,7 +8,7 @@ import time
 import torch
 import gc
 from typing import Dict, List, Any
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
 from peft import get_peft_model, LoraConfig
 from config import GENERATION_CONFIG, DEVICE, TIMEOUT_SECONDS
 
@@ -70,8 +70,15 @@ def evaluate_baseline_model(
 
     # [BREAKPOINT_3] - Model Loading
     # Description: Load pretrained model and tokenizer from HuggingFace to specified device
+    # Load config first with explicit trust_remote_code=True
+    config = AutoConfig.from_pretrained(
+        model_name,
+        trust_remote_code=True
+    )
+    
     base_model = AutoModelForCausalLM.from_pretrained(
         model_name,
+        config=config,
         torch_dtype=torch.float16,
         device_map="auto",
         trust_remote_code=True  # Required for Phi-3 custom code
@@ -191,8 +198,15 @@ def evaluate_lora_model(
     
     # [BREAKPOINT_3] - Model Loading
     # Description: Load pretrained model and tokenizer from HuggingFace
+    # Load config first with explicit trust_remote_code=True
+    config = AutoConfig.from_pretrained(
+        model_name,
+        trust_remote_code=True
+    )
+    
     base_model = AutoModelForCausalLM.from_pretrained(
         model_name,
+        config=config,
         torch_dtype=torch.float16,
         device_map="auto",
         trust_remote_code=True  # Required for Phi-3 custom code
