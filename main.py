@@ -7,9 +7,21 @@ With detailed variable inspection at each step
 import sys
 import os
 import json
+import signal
 
 # Configure HuggingFace Hub environment BEFORE importing anything else
 os.environ['HF_HUB_DISABLE_SYMLINKS_WARNING'] = '1'
+
+# Fix for Windows multiprocess signal handling issue
+# multiprocess library tries to use signal constants that don't exist on Windows
+if not hasattr(signal, 'SIGALRM'):
+    signal.SIGALRM = 14  # Unix SIGALRM number (harmless on Windows)
+if not hasattr(signal, 'SIGCHLD'):
+    signal.SIGCHLD = 17  # Unix SIGCHLD number
+if not hasattr(signal, 'SIGUSR1'):
+    signal.SIGUSR1 = 10  # Unix SIGUSR1 number
+if not hasattr(signal, 'SIGUSR2'):
+    signal.SIGUSR2 = 12  # Unix SIGUSR2 number
 
 from data_loader import load_all_datasets
 from model_evaluator import evaluate_baseline_model, evaluate_lora_model
