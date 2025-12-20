@@ -29,14 +29,14 @@ def print_device_info():
     if torch.cuda.is_available():
         device_name = torch.cuda.get_device_name(0)
         device_count = torch.cuda.device_count()
-        print(f"\n🔹 Device Info:")
+        print(f"\n🔧 Device Info:")
         print(f"   - Device: GPU (CUDA)")
         print(f"   - GPU Name: {device_name}")
         print(f"   - GPU Count: {device_count}")
         print(f"   - GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
         print(f"   - CUDA Version: {torch.version.cuda}")
     else:
-        print(f"\n🔹 Device Info:")
+        print(f"\n🔧 Device Info:")
         print(f"   - Device: CPU")
         print(f"   - WARNING: Using CPU will be very slow for model inference!")
     print()
@@ -149,7 +149,7 @@ def evaluate_baseline_model(
                     outputs = base_model.generate(
                         input_ids=input_ids,
                         attention_mask=attention_mask,
-                        max_new_tokens=256,              # INCREASED from 64 to allow complete reasoning
+                        max_new_tokens=512,              # INCREASED from 256 to 512 for complete reasoning
                         do_sample=False,                 # Greedy decoding for deterministic output
                         pad_token_id=tokenizer_base.eos_token_id
                     )
@@ -297,7 +297,7 @@ def evaluate_lora_model(
                     outputs = lora_model.generate(
                         input_ids=input_ids,
                         attention_mask=attention_mask,
-                        max_new_tokens=256,              # INCREASED from 64 to allow complete reasoning
+                        max_new_tokens=512,              # INCREASED from 256 to 512 for complete reasoning
                         do_sample=False,                 # Greedy decoding for deterministic output
                         pad_token_id=tokenizer_base.eos_token_id
                     )
