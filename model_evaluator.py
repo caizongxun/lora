@@ -1,7 +1,7 @@
 """
 Model evaluator module for comparing baseline and LoRA-tuned models
 Implements inference and performance measurement
-Supports 8-bit quantization for reduced GPU memory usage
+Uses full precision with automatic memory management
 """
 
 import re
@@ -9,41 +9,9 @@ import time
 import torch
 import gc
 from typing import Dict, List, Any
-from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig, BitsAndBytesConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
 from peft import get_peft_model, LoraConfig, prepare_model_for_kbit_training
 from config import GENERATION_CONFIG, DEVICE, TIMEOUT_SECONDS
-
-# Configuration for 8-bit quantization with explicit dtype to avoid uint8 conversion errors
-QUANTIZATION_CONFIG = BitsAndBytesConfig(
-    load_in_8bit=True,
-    bnb_8bit_quant_type="nf4",
-    bnb_8bit_use_double_quant=True,
-    bnb_8bit_compute_dtype=torch.bfloat16  # Use bfloat16 for computation
-)
-
-
-def patch_matmul_lt_state():
-    """
-    Monkey-patch to fix the missing 'memory_efficient_backward' attribute in MatmulLtState.
-    This is needed due to version incompatibility between bitsandbytes and peft on Windows.
-    """
-    try:
-        from bitsandbytes.nn.modules import Params4bit
-        # Check if MatmulLtState exists and needs patching
-        if hasattr(Params4bit, 'state') and hasattr(Params4bit.state, '__dict__'):
-            # Try to access the state class
-            try:
-                from bitsandbytes.nn.modules import MatmulLtState
-                # Add the missing attribute if it doesn't exist
-                if not hasattr(MatmulLtState, 'memory_efficient_backward'):
-                    MatmulLtState.memory_efficient_backward = True
-                    print("✅ Patched MatmulLtState.memory_efficient_backward")
-            except (ImportError, AttributeError):
-                # Alternative: patch at the instance level
-                # We'll handle this in get_peft_model try-except
-                pass
-    except ImportError:
-        pass
 
 
 def print_device_info():
@@ -121,20 +89,19 @@ def evaluate_baseline_model(
     Evaluate baseline model (untuned) on all datasets
     """
     print(f"Loading baseline model: {model_name}")
-    print(f"Using 8-bit quantization to save GPU memory...")
+    print(f"Using full precision with automatic memory management...")
 
     config = AutoConfig.from_pretrained(model_name, trust_remote_code=True)
     
-    # 🔧 CRITICAL FIX: Add torch_dtype=torch.bfloat16 to force proper type conversion
-    # This prevents the 'uint8' error during quantization
-    print(f"🔍 Debug: Loading with torch_dtype=torch.bfloat16...")
+    # 🔧 Use full precision without quantization
+    # device_map='auto' handles CPU offloading automatically
+    print(f"🔍 Debug: Loading with device_map='auto' (no quantization)...")
     
     base_model = AutoModelForCausalLM.from_pretrained(
         model_name,
         config=config,
-        quantization_config=QUANTIZATION_CONFIG,
-        device_map="cuda",
-        torch_dtype=torch.bfloat16,  # 🔧 Force bfloat16 to prevent uint8 conversion
+        device_map="auto",  # Automatic GPU/CPU memory management
+        torch_dtype=torch.float32,  # Full precision
         trust_remote_code=True
     )
     
@@ -142,7 +109,7 @@ def evaluate_baseline_model(
     
     tokenizer_base = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
     tokenizer_base.pad_token = tokenizer_base.eos_token
-    print(f"✅ Baseline model loaded on device: {base_model.device} (8-bit quantized)")
+    print(f"✅ Baseline model loaded with device_map='auto' (full precision)")
     
     print_device_info()
     
@@ -239,19 +206,18 @@ def evaluate_lora_model(
     Evaluate LoRA-tuned model on all datasets
     """
     print(f"Loading base model for LoRA: {model_name}")
-    print(f"Using 8-bit quantization to save GPU memory...")
+    print(f"Using full precision with automatic memory management...")
 
     config = AutoConfig.from_pretrained(model_name, trust_remote_code=True)
     
-    # 🔧 CRITICAL FIX: Add torch_dtype=torch.bfloat16 to force proper type conversion
-    print(f"🔍 Debug: Loading with torch_dtype=torch.bfloat16...")
+    # 🔧 Use full precision without quantization
+    print(f"🔍 Debug: Loading with device_map='auto' (no quantization)...")
     
     base_model = AutoModelForCausalLM.from_pretrained(
         model_name,
         config=config,
-        quantization_config=QUANTIZATION_CONFIG,
-        device_map="cuda",
-        torch_dtype=torch.bfloat16,  # 🔧 Force bfloat16 to prevent uint8 conversion
+        device_map="auto",  # Automatic GPU/CPU memory management
+        torch_dtype=torch.float32,  # Full precision
         trust_remote_code=True
     )
     
@@ -259,25 +225,12 @@ def evaluate_lora_model(
     
     tokenizer_base = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
     tokenizer_base.pad_token = tokenizer_base.eos_token
-    print(f"✅ LoRA base model loaded on device: {base_model.device} (8-bit quantized)")
+    print(f"✅ LoRA base model loaded with device_map='auto' (full precision)")
 
-    print("Preparing model for k-bit training (compatibility fix)...")
-    base_model = prepare_model_for_kbit_training(base_model)
+    print("Preparing model for training...")
+    # Note: prepare_model_for_kbit_training is designed for quantized models
+    # For full precision, we skip this step
     print("✅ Model preparation complete.")
-    
-    # 🔧 CRITICAL: Patch MatmulLtState to fix bitsandbytes/peft incompatibility
-    print("Applying compatibility patches...")
-    patch_matmul_lt_state()
-    
-    # Manually patch model's quantized layers if needed
-    for module in base_model.modules():
-        if hasattr(module, 'weight') and hasattr(module.weight, 'data'):
-            # For 8-bit quantized layers
-            if hasattr(module, 'state'):
-                if not hasattr(module.state, 'memory_efficient_backward'):
-                    module.state.memory_efficient_backward = True
-    
-    print("✅ Compatibility patches applied.")
     
     print_device_info()
     
