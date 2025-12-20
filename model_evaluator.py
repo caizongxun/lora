@@ -209,6 +209,10 @@ def evaluate_baseline_model(
     
     baseline_results = {}
     
+    # Get max_new_tokens from config
+    max_tokens = GENERATION_CONFIG.get("max_new_tokens", 1024)
+    print(f"[INFO] Using max_new_tokens: {max_tokens}")
+    
     for dataset_name, dataset_content in datasets_dict.items():
         questions_list = dataset_content["questions_list"]
         ground_truth_answers = dataset_content["ground_truth_answers"]
@@ -230,7 +234,7 @@ def evaluate_baseline_model(
                     outputs = base_model.generate(
                         input_ids=input_ids,
                         attention_mask=attention_mask,
-                        max_new_tokens=256,
+                        max_new_tokens=max_tokens,  # USE CONFIG VALUE
                         do_sample=False,
                         pad_token_id=tokenizer_base.eos_token_id
                     )
@@ -356,6 +360,10 @@ def evaluate_lora_model_with_checkpoint(
     
     lora_results = {}
     
+    # Get max_new_tokens from config
+    max_tokens = GENERATION_CONFIG.get("max_new_tokens", 1024)
+    print(f"[INFO] Using max_new_tokens: {max_tokens}")
+    
     for dataset_name, dataset_content in datasets_dict.items():
         questions_list = dataset_content["questions_list"]
         ground_truth_answers = dataset_content["ground_truth_answers"]
@@ -377,7 +385,7 @@ def evaluate_lora_model_with_checkpoint(
                     outputs = lora_model.generate(
                         input_ids=input_ids,
                         attention_mask=attention_mask,
-                        max_new_tokens=256,
+                        max_new_tokens=max_tokens,  # USE CONFIG VALUE
                         do_sample=False,
                         pad_token_id=tokenizer_base.eos_token_id
                     )
@@ -517,6 +525,10 @@ def evaluate_lora_model(
     
     lora_results = {}
     
+    # Get max_new_tokens from config
+    max_tokens = GENERATION_CONFIG.get("max_new_tokens", 1024)
+    print(f"[INFO] Using max_new_tokens: {max_tokens}")
+    
     for dataset_name, dataset_content in datasets_dict.items():
         questions_list = dataset_content["questions_list"]
         ground_truth_answers = dataset_content["ground_truth_answers"]
@@ -538,7 +550,7 @@ def evaluate_lora_model(
                     outputs = lora_model.generate(
                         input_ids=input_ids,
                         attention_mask=attention_mask,
-                        max_new_tokens=256,
+                        max_new_tokens=max_tokens,  # USE CONFIG VALUE
                         do_sample=False,
                         pad_token_id=tokenizer_base.eos_token_id
                     )
