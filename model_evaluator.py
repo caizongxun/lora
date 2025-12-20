@@ -4,8 +4,8 @@ Implements inference and performance measurement
 Uses 4-bit quantization for minimal GPU memory usage
 Loads trained LoRA weights from HuggingFace Hub or local checkpoint
 
-🔧 KEY UPDATE: Now includes evaluate_lora_model_with_checkpoint() function
-              which downloads trained LoRA weights from Hugging Face Hub
+KEY UPDATE: Now includes evaluate_lora_model_with_checkpoint() function
+            which downloads trained LoRA weights from Hugging Face Hub
 """
 
 import re
@@ -24,16 +24,16 @@ def print_device_info():
     if torch.cuda.is_available():
         device_name = torch.cuda.get_device_name(0)
         device_count = torch.cuda.device_count()
-        print(f"\n🔧 Device Info:")
-        print(f"   - Device: GPU (CUDA)")
-        print(f"   - GPU Name: {device_name}")
-        print(f"   - GPU Count: {device_count}")
-        print(f"   - GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
-        print(f"   - CUDA Version: {torch.version.cuda}")
+        print(f"\n[INFO] Device Info:")
+        print(f"       - Device: GPU (CUDA)")
+        print(f"       - GPU Name: {device_name}")
+        print(f"       - GPU Count: {device_count}")
+        print(f"       - GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
+        print(f"       - CUDA Version: {torch.version.cuda}")
     else:
-        print(f"\n🔧 Device Info:")
-        print(f"   - Device: CPU")
-        print(f"   - WARNING: Using CPU will be very slow for model inference!")
+        print(f"\n[INFO] Device Info:")
+        print(f"       - Device: CPU")
+        print(f"       - WARNING: Using CPU will be very slow for model inference!")
     print()
 
 
@@ -109,7 +109,7 @@ def evaluate_baseline_model(
 
     # Use 4-bit quantization for maximum memory efficiency
     quantization_config = get_quantization_config()
-    print(f"🔍 Debug: Loading with 4-bit quantization, device_map='cuda:0'...")
+    print(f"[DEBUG] Loading with 4-bit quantization, device_map='cuda:0'...")
     
     base_model = AutoModelForCausalLM.from_pretrained(
         model_name,
@@ -118,12 +118,12 @@ def evaluate_baseline_model(
         trust_remote_code=True
     )
     
-    print(f"✅ Model loaded with 4-bit quantization")
-    print(f"✅ Model dtype: {base_model.dtype}")
+    print(f"[SUCCESS] Model loaded with 4-bit quantization")
+    print(f"[INFO] Model dtype: {base_model.dtype}")
     
     tokenizer_base = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
     tokenizer_base.pad_token = tokenizer_base.eos_token
-    print(f"✅ Baseline model ready for inference")
+    print(f"[SUCCESS] Baseline model ready for inference")
     
     print_device_info()
     
@@ -169,7 +169,7 @@ def evaluate_baseline_model(
                     print(f"\nModel Response: {response[:500]}..." if len(response) > 500 else f"\nModel Response: {response}")
                     print(f"\nExtracted Answer: '{extracted_answer}'")
                     print(f"Ground Truth: '{ground_truth_answers[idx]}'")
-                    print(f"Match: {'✅ YES' if extracted_answer == ground_truth_answers[idx] else '❌ NO'}")
+                    print(f"Match: {'YES' if extracted_answer == ground_truth_answers[idx] else 'NO'}")
                     print(f"{'='*80}\n")
                 
                 is_correct = (extracted_answer == ground_truth_answers[idx])
@@ -217,10 +217,9 @@ def evaluate_lora_model_with_checkpoint(
     datasets_dict: Dict[str, Dict[str, List]]
 ) -> Dict[str, Dict[str, Any]]:
     """
-    
-    🔧 NEW FUNCTION: Evaluate LoRA-tuned model on all datasets
-       Downloads trained LoRA weights from Hugging Face Hub
-       Uses 4-bit quantization for minimal GPU memory usage
+    NEW FUNCTION: Evaluate LoRA-tuned model on all datasets
+    Downloads trained LoRA weights from Hugging Face Hub
+    Uses 4-bit quantization for minimal GPU memory usage
     
     Args:
         model_name: Base model name (e.g., "microsoft/Phi-3-mini-4k-instruct")
@@ -240,23 +239,23 @@ def evaluate_lora_model_with_checkpoint(
         trust_remote_code=True
     )
     
-    print(f"✅ Model loaded with 4-bit quantization")
-    print(f"✅ Model dtype: {base_model.dtype}")
+    print(f"[SUCCESS] Model loaded with 4-bit quantization")
+    print(f"[INFO] Model dtype: {base_model.dtype}")
     
     tokenizer_base = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
     tokenizer_base.pad_token = tokenizer_base.eos_token
-    print(f"✅ LoRA base model ready")
+    print(f"[SUCCESS] LoRA base model ready")
 
     print("\nPreparing model for LoRA...")
     base_model = prepare_model_for_kbit_training(base_model)
-    print("✅ Model preparation complete.")
+    print("[SUCCESS] Model preparation complete.")
     
     print_device_info()
     
-    # 🔧 CRITICAL: Load trained LoRA weights from HuggingFace Hub
-    print(f"\n🔍 Downloading trained LoRA weights from Hugging Face Hub...")
-    print(f"   Repository: {hf_model_id}")
-    print(f"   (This may take a few seconds on first run)")
+    # CRITICAL: Load trained LoRA weights from HuggingFace Hub
+    print(f"\n[INFO] Downloading trained LoRA weights from Hugging Face Hub...")
+    print(f"       Repository: {hf_model_id}")
+    print(f"       (This may take a few seconds on first run)")
     
     try:
         # Load the trained LoRA weights from HF Hub
@@ -265,19 +264,19 @@ def evaluate_lora_model_with_checkpoint(
             hf_model_id,
             is_trainable=False  # Set to False for inference only
         )
-        print(f"\n✅ Successfully downloaded and loaded LoRA weights from HF Hub!")
-        print(f"✅ Using TRAINED LoRA adapters (not random initialization)")
-        print(f"✅ Model is now ready for evaluation")
+        print(f"\n[SUCCESS] Successfully downloaded and loaded LoRA weights from HF Hub!")
+        print(f"[SUCCESS] Using TRAINED LoRA adapters (not random initialization)")
+        print(f"[SUCCESS] Model is now ready for evaluation")
         
     except Exception as e:
-        print(f"\n⚠️  ERROR: Could not download LoRA weights from HF Hub: {e}")
-        print(f"\n📍 Please ensure:")
-        print(f"   1. Internet connection is working")
-        print(f"   2. Repository exists: https://huggingface.co/{hf_model_id}")
-        print(f"   3. Repository is public or you have access token")
+        print(f"\n[ERROR] Could not download LoRA weights from HF Hub: {e}")
+        print(f"\n[INFO] Please ensure:")
+        print(f"       1. Internet connection is working")
+        print(f"       2. Repository exists: https://huggingface.co/{hf_model_id}")
+        print(f"       3. Repository is public or you have access token")
         raise
     
-    print("\n✅ LoRA model successfully loaded!\n")
+    print("\n[SUCCESS] LoRA model successfully loaded!\n")
     
     lora_results = {}
     
@@ -315,13 +314,13 @@ def evaluate_lora_model_with_checkpoint(
                 
                 if idx < 3:
                     print(f"\n{'='*80}")
-                    print(f"[LoRA] Debug Sample {idx} - {dataset_name}")
+                    print(f"[LORA] Debug Sample {idx} - {dataset_name}")
                     print(f"{'='*80}")
                     print(f"Question: {question[:200]}..." if len(question) > 200 else f"Question: {question}")
                     print(f"\nModel Response: {response[:500]}..." if len(response) > 500 else f"\nModel Response: {response}")
                     print(f"\nExtracted Answer: '{extracted_answer}'")
                     print(f"Ground Truth: '{ground_truth_answers[idx]}'")
-                    print(f"Match: {'✅ YES' if extracted_answer == ground_truth_answers[idx] else '❌ NO'}")
+                    print(f"Match: {'YES' if extracted_answer == ground_truth_answers[idx] else 'NO'}")
                     print(f"{'='*80}\n")
                 
                 is_correct = (extracted_answer == ground_truth_answers[idx])
@@ -371,17 +370,17 @@ def evaluate_lora_model(
     """
     Evaluate LoRA-tuned model on all datasets
     Uses 4-bit quantization for minimal GPU memory usage
-    🔧 LOADS TRAINED LoRA WEIGHTS FROM LOCAL CHECKPOINT
+    LOADS TRAINED LoRA WEIGHTS FROM LOCAL CHECKPOINT
     
-    ⚠️  DEPRECATED: Use evaluate_lora_model_with_checkpoint() instead
-        This function is kept for backward compatibility only
+    DEPRECATED: Use evaluate_lora_model_with_checkpoint() instead
+    This function is kept for backward compatibility only
     """
     print(f"Loading base model for LoRA: {model_name}")
     print(f"Using 4-bit quantization...")
 
     # Use 4-bit quantization for maximum memory efficiency
     quantization_config = get_quantization_config()
-    print(f"🔍 Debug: Loading with 4-bit quantization, device_map='cuda:0'...")
+    print(f"[DEBUG] Loading with 4-bit quantization, device_map='cuda:0'...")
     
     base_model = AutoModelForCausalLM.from_pretrained(
         model_name,
@@ -390,16 +389,16 @@ def evaluate_lora_model(
         trust_remote_code=True
     )
     
-    print(f"✅ Model loaded with 4-bit quantization")
-    print(f"✅ Model dtype: {base_model.dtype}")
+    print(f"[SUCCESS] Model loaded with 4-bit quantization")
+    print(f"[INFO] Model dtype: {base_model.dtype}")
     
     tokenizer_base = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
     tokenizer_base.pad_token = tokenizer_base.eos_token
-    print(f"✅ LoRA base model ready for configuration")
+    print(f"[SUCCESS] LoRA base model ready for configuration")
 
     print("Preparing model for LoRA training...")
     base_model = prepare_model_for_kbit_training(base_model)
-    print("✅ Model preparation complete.")
+    print("[SUCCESS] Model preparation complete.")
     
     print_device_info()
     
@@ -417,8 +416,8 @@ def evaluate_lora_model(
     lora_model = get_peft_model(base_model, lora_config)
     lora_model.print_trainable_parameters()
     
-    # 🔧 CRITICAL: Load trained LoRA weights from local checkpoint
-    print(f"\n🔍 Attempting to load trained LoRA weights...")
+    # CRITICAL: Load trained LoRA weights from local checkpoint
+    print(f"\n[INFO] Attempting to load trained LoRA weights...")
     if os.path.exists(LORA_CHECKPOINT_DIR):
         try:
             # Load the trained LoRA weights from checkpoint
@@ -427,18 +426,18 @@ def evaluate_lora_model(
                 LORA_CHECKPOINT_DIR,
                 is_trainable=False  # Set to False for inference only
             )
-            print(f"✅ Loaded trained LoRA weights from: {LORA_CHECKPOINT_DIR}")
-            print(f"✅ This model now uses TRAINED LoRA adapters, NOT random initialization")
+            print(f"[SUCCESS] Loaded trained LoRA weights from: {LORA_CHECKPOINT_DIR}")
+            print(f"[SUCCESS] This model now uses TRAINED LoRA adapters, NOT random initialization")
         except Exception as e:
-            print(f"⚠️  WARNING: Could not load trained weights: {e}")
-            print(f"⚠️  Using randomly initialized LoRA (model won't show improvement)")
+            print(f"[WARNING] Could not load trained weights: {e}")
+            print(f"[WARNING] Using randomly initialized LoRA (model won't show improvement)")
     else:
-        print(f"⚠️  WARNING: LoRA checkpoint not found at: {LORA_CHECKPOINT_DIR}")
-        print(f"⚠️  Using randomly initialized LoRA (model won't show improvement)")
-        print(f"⚠️  To use trained weights, ensure checkpoint exists at:")
+        print(f"[WARNING] LoRA checkpoint not found at: {LORA_CHECKPOINT_DIR}")
+        print(f"[WARNING] Using randomly initialized LoRA (model won't show improvement)")
+        print(f"[WARNING] To use trained weights, ensure checkpoint exists at:")
         print(f"           {os.path.abspath(LORA_CHECKPOINT_DIR)}")
     
-    print("\n✅ LoRA model successfully created!\n")
+    print("\n[SUCCESS] LoRA model successfully created!\n")
     
     lora_results = {}
     
@@ -476,13 +475,13 @@ def evaluate_lora_model(
                 
                 if idx < 3:
                     print(f"\n{'='*80}")
-                    print(f"[LoRA] Debug Sample {idx} - {dataset_name}")
+                    print(f"[LORA] Debug Sample {idx} - {dataset_name}")
                     print(f"{'='*80}")
                     print(f"Question: {question[:200]}..." if len(question) > 200 else f"Question: {question}")
                     print(f"\nModel Response: {response[:500]}..." if len(response) > 500 else f"\nModel Response: {response}")
                     print(f"\nExtracted Answer: '{extracted_answer}'")
                     print(f"Ground Truth: '{ground_truth_answers[idx]}'")
-                    print(f"Match: {'✅ YES' if extracted_answer == ground_truth_answers[idx] else '❌ NO'}")
+                    print(f"Match: {'YES' if extracted_answer == ground_truth_answers[idx] else 'NO'}")
                     print(f"{'='*80}\n")
                 
                 is_correct = (extracted_answer == ground_truth_answers[idx])
