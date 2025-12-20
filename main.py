@@ -10,7 +10,7 @@ import json
 import signal
 
 # ============================================================================
-# CRITICAL FIX: Monkeypatch signal module for Windows compatibility
+# CRITICAL FIX: Comprehensive signal module patching for Windows compatibility
 # This MUST be done before any other imports (datasets, multiprocess, etc.)
 # ============================================================================
 
@@ -24,7 +24,15 @@ if not hasattr(signal, 'SIGUSR1'):
 if not hasattr(signal, 'SIGUSR2'):
     signal.SIGUSR2 = 12
 
-# 2. Monkeypatch signal.signal() to safely handle unsupported signals on Windows
+# 2. Add alarm() function that doesn't exist on Windows
+# transformers uses signal.alarm() for timeout handling
+if not hasattr(signal, 'alarm'):
+    def _dummy_alarm(seconds):
+        """Dummy alarm function for Windows (alarms not supported)."""
+        return 0
+    signal.alarm = _dummy_alarm
+
+# 3. Monkeypatch signal.signal() to safely handle unsupported signals on Windows
 _original_signal_signal = signal.signal
 
 def _safe_signal_handler(sig, handler):
