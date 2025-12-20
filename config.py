@@ -7,8 +7,8 @@ import os
 from datetime import datetime
 
 # Model Configuration
-BASE_MODEL_NAME = "microsoft/phi-2"  # Base model identifier
-MODEL_SIZE = "2.7B"  # Model size indicator
+BASE_MODEL_NAME = "microsoft/Phi-3-mini-4k-instruct"  # Base model identifier - Upgraded from Phi-2
+MODEL_SIZE = "3.8B"  # Model size indicator
 
 # Dataset Configuration
 DATASET_CONFIG = {
