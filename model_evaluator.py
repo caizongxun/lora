@@ -2,16 +2,18 @@
 Model evaluator module for comparing baseline and LoRA-tuned models
 Implements inference and performance measurement
 Uses 4-bit quantization for minimal GPU memory usage
+Loads trained LoRA weights from checkpoint
 """
 
 import re
 import time
 import torch
 import gc
+import os
 from typing import Dict, List, Any
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig, BitsAndBytesConfig
-from peft import get_peft_model, LoraConfig, prepare_model_for_kbit_training
-from config import GENERATION_CONFIG, DEVICE, TIMEOUT_SECONDS
+from peft import get_peft_model, LoraConfig, prepare_model_for_kbit_training, PeftModel
+from config import GENERATION_CONFIG, DEVICE, TIMEOUT_SECONDS, LORA_CHECKPOINT_DIR
 
 
 def print_device_info():
@@ -84,7 +86,7 @@ def extract_answer(response: str) -> str:
 def get_quantization_config():
     """Create 4-bit quantization config for aggressive memory reduction"""
     return BitsAndBytesConfig(
-        load_in_4bit=True,  # 🔧 CHANGED: 4-bit instead of 8-bit
+        load_in_4bit=True,
         bnb_4bit_compute_dtype=torch.float16,
         bnb_4bit_use_double_quant=True,
         bnb_4bit_quant_type="nf4"
@@ -102,14 +104,14 @@ def evaluate_baseline_model(
     print(f"Loading baseline model: {model_name}")
     print(f"Using 4-bit quantization...")
 
-    # 🔧 Use 4-bit quantization for maximum memory efficiency
+    # Use 4-bit quantization for maximum memory efficiency
     quantization_config = get_quantization_config()
     print(f"🔍 Debug: Loading with 4-bit quantization, device_map='cuda:0'...")
     
     base_model = AutoModelForCausalLM.from_pretrained(
         model_name,
         quantization_config=quantization_config,
-        device_map="cuda:0",  # 🔧 CHANGED: Simple GPU-only device_map
+        device_map="cuda:0",
         trust_remote_code=True
     )
     
@@ -214,18 +216,19 @@ def evaluate_lora_model(
     """
     Evaluate LoRA-tuned model on all datasets
     Uses 4-bit quantization for minimal GPU memory usage
+    🔧 LOADS TRAINED LoRA WEIGHTS FROM CHECKPOINT
     """
     print(f"Loading base model for LoRA: {model_name}")
     print(f"Using 4-bit quantization...")
 
-    # 🔧 Use 4-bit quantization for maximum memory efficiency
+    # Use 4-bit quantization for maximum memory efficiency
     quantization_config = get_quantization_config()
     print(f"🔍 Debug: Loading with 4-bit quantization, device_map='cuda:0'...")
     
     base_model = AutoModelForCausalLM.from_pretrained(
         model_name,
         quantization_config=quantization_config,
-        device_map="cuda:0",  # 🔧 CHANGED: Simple GPU-only device_map
+        device_map="cuda:0",
         trust_remote_code=True
     )
     
@@ -255,6 +258,28 @@ def evaluate_lora_model(
     
     lora_model = get_peft_model(base_model, lora_config)
     lora_model.print_trainable_parameters()
+    
+    # 🔧 CRITICAL: Load trained LoRA weights from checkpoint
+    print(f"\n🔍 Attempting to load trained LoRA weights...")
+    if os.path.exists(LORA_CHECKPOINT_DIR):
+        try:
+            # Load the trained LoRA weights from checkpoint
+            lora_model = PeftModel.from_pretrained(
+                base_model,
+                LORA_CHECKPOINT_DIR,
+                is_trainable=False  # Set to False for inference only
+            )
+            print(f"✅ Loaded trained LoRA weights from: {LORA_CHECKPOINT_DIR}")
+            print(f"✅ This model now uses TRAINED LoRA adapters, NOT random initialization")
+        except Exception as e:
+            print(f"⚠️  WARNING: Could not load trained weights: {e}")
+            print(f"⚠️  Using randomly initialized LoRA (model won't show improvement)")
+    else:
+        print(f"⚠️  WARNING: LoRA checkpoint not found at: {LORA_CHECKPOINT_DIR}")
+        print(f"⚠️  Using randomly initialized LoRA (model won't show improvement)")
+        print(f"⚠️  To use trained weights, ensure checkpoint exists at:")
+        print(f"           {os.path.abspath(LORA_CHECKPOINT_DIR)}")
+    
     print("\n✅ LoRA model successfully created!\n")
     
     lora_results = {}
