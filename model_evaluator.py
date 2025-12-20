@@ -6,6 +6,7 @@ Implements inference and performance measurement
 import re
 import time
 import torch
+import gc
 from typing import Dict, List, Any
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import get_peft_model, LoraConfig
@@ -103,7 +104,7 @@ def evaluate_baseline_model(
                     outputs = base_model.generate(
                         input_ids=input_ids,
                         attention_mask=attention_mask,
-                        max_new_tokens=128,              # Reduced from 256 for faster inference
+                        max_new_tokens=64,               # Reduced to 64 for lower memory usage
                         do_sample=False,                 # Greedy decoding for deterministic output
                         pad_token_id=tokenizer_base.eos_token_id
                     )
@@ -130,10 +131,18 @@ def evaluate_baseline_model(
                 is_correct = (extracted_answer == ground_truth_answers[idx])
                 if is_correct:
                     correct_count += 1
+                
+                # MEMORY OPTIMIZATION: Clean up intermediate tensors
+                del input_ids, attention_mask, outputs
+                torch.cuda.empty_cache()
+                gc.collect()
                     
             except Exception as e:
                 print(f"Error processing sample {idx}: {e}")
                 predictions.append("")
+                # Clear cache on error too
+                torch.cuda.empty_cache()
+                gc.collect()
         
         end_time = time.time()  # Inference end timestamp (float)
         elapsed_time = end_time - start_time  # Total inference time in seconds (float)
@@ -227,7 +236,7 @@ def evaluate_lora_model(
                     outputs = lora_model.generate(
                         input_ids=input_ids,
                         attention_mask=attention_mask,
-                        max_new_tokens=128,              # Reduced from 256 for faster inference
+                        max_new_tokens=64,               # Reduced to 64 for lower memory usage
                         do_sample=False,                 # Greedy decoding for deterministic output
                         pad_token_id=tokenizer_base.eos_token_id
                     )
@@ -254,10 +263,18 @@ def evaluate_lora_model(
                 is_correct = (extracted_answer == ground_truth_answers[idx])
                 if is_correct:
                     correct_count += 1
+                
+                # MEMORY OPTIMIZATION: Clean up intermediate tensors
+                del input_ids, attention_mask, outputs
+                torch.cuda.empty_cache()
+                gc.collect()
                     
             except Exception as e:
                 print(f"Error processing sample {idx}: {e}")
                 predictions.append("")
+                # Clear cache on error too
+                torch.cuda.empty_cache()
+                gc.collect()
         
         end_time = time.time()  # Inference end timestamp (float)
         elapsed_time = end_time - start_time  # Total inference time in seconds (float)
