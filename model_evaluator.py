@@ -1,7 +1,7 @@
 """
 Model evaluator module for comparing baseline and LoRA-tuned models
 Implements inference and performance measurement
-Supports 4-bit quantization for reduced GPU memory usage
+Supports 8-bit quantization for reduced GPU memory usage
 """
 
 import re
@@ -13,12 +13,12 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig, BitsAn
 from peft import get_peft_model, LoraConfig, prepare_model_for_kbit_training
 from config import GENERATION_CONFIG, DEVICE, TIMEOUT_SECONDS
 
-# Configuration for 4-bit quantization (more stable than 8-bit on Windows)
+# Configuration for 8-bit quantization with explicit dtype to avoid uint8 conversion errors
 QUANTIZATION_CONFIG = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_use_double_quant=True,
-    bnb_4bit_compute_dtype=torch.bfloat16
+    load_in_8bit=True,
+    bnb_8bit_quant_type="nf4",
+    bnb_8bit_use_double_quant=True,
+    bnb_8bit_compute_dtype=torch.bfloat16  # Use bfloat16 for computation
 )
 
 
@@ -121,20 +121,28 @@ def evaluate_baseline_model(
     Evaluate baseline model (untuned) on all datasets
     """
     print(f"Loading baseline model: {model_name}")
-    print(f"Using 4-bit quantization to save GPU memory...")
+    print(f"Using 8-bit quantization to save GPU memory...")
 
     config = AutoConfig.from_pretrained(model_name, trust_remote_code=True)
+    
+    # 🔧 CRITICAL FIX: Add torch_dtype=torch.bfloat16 to force proper type conversion
+    # This prevents the 'uint8' error during quantization
+    print(f"🔍 Debug: Loading with torch_dtype=torch.bfloat16...")
     
     base_model = AutoModelForCausalLM.from_pretrained(
         model_name,
         config=config,
         quantization_config=QUANTIZATION_CONFIG,
         device_map="cuda",
+        torch_dtype=torch.bfloat16,  # 🔧 Force bfloat16 to prevent uint8 conversion
         trust_remote_code=True
     )
+    
+    print(f"✅ Model dtype after loading: {base_model.dtype}")
+    
     tokenizer_base = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
     tokenizer_base.pad_token = tokenizer_base.eos_token
-    print(f"✅ Baseline model loaded on device: {base_model.device} (4-bit quantized)")
+    print(f"✅ Baseline model loaded on device: {base_model.device} (8-bit quantized)")
     
     print_device_info()
     
@@ -231,20 +239,27 @@ def evaluate_lora_model(
     Evaluate LoRA-tuned model on all datasets
     """
     print(f"Loading base model for LoRA: {model_name}")
-    print(f"Using 4-bit quantization to save GPU memory...")
+    print(f"Using 8-bit quantization to save GPU memory...")
 
     config = AutoConfig.from_pretrained(model_name, trust_remote_code=True)
+    
+    # 🔧 CRITICAL FIX: Add torch_dtype=torch.bfloat16 to force proper type conversion
+    print(f"🔍 Debug: Loading with torch_dtype=torch.bfloat16...")
     
     base_model = AutoModelForCausalLM.from_pretrained(
         model_name,
         config=config,
         quantization_config=QUANTIZATION_CONFIG,
         device_map="cuda",
+        torch_dtype=torch.bfloat16,  # 🔧 Force bfloat16 to prevent uint8 conversion
         trust_remote_code=True
     )
+    
+    print(f"✅ Model dtype after loading: {base_model.dtype}")
+    
     tokenizer_base = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
     tokenizer_base.pad_token = tokenizer_base.eos_token
-    print(f"✅ LoRA base model loaded on device: {base_model.device} (4-bit quantized)")
+    print(f"✅ LoRA base model loaded on device: {base_model.device} (8-bit quantized)")
 
     print("Preparing model for k-bit training (compatibility fix)...")
     base_model = prepare_model_for_kbit_training(base_model)
@@ -257,7 +272,7 @@ def evaluate_lora_model(
     # Manually patch model's quantized layers if needed
     for module in base_model.modules():
         if hasattr(module, 'weight') and hasattr(module.weight, 'data'):
-            # For 4-bit quantized layers
+            # For 8-bit quantized layers
             if hasattr(module, 'state'):
                 if not hasattr(module.state, 'memory_efficient_backward'):
                     module.state.memory_efficient_backward = True
