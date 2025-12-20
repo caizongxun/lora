@@ -66,7 +66,7 @@ def evaluate_baseline_model(
             }
     """
     print(f"Loading baseline model: {model_name}")
-    
+
     # [BREAKPOINT_3] - Model Loading
     # Description: Load pretrained model and tokenizer from HuggingFace to specified device
     base_model = AutoModelForCausalLM.from_pretrained(
@@ -76,6 +76,7 @@ def evaluate_baseline_model(
     )
     tokenizer_base = AutoTokenizer.from_pretrained(model_name)
     tokenizer_base.pad_token = tokenizer_base.eos_token
+    print(f"✅ Baseline model loaded on device: {base_model.device}")
     
     baseline_results = {}  # Container for all results (dict[str, dict])
     
@@ -93,14 +94,20 @@ def evaluate_baseline_model(
             try:
                 # [BREAKPOINT_1] - Model Inference
                 # Description: Execute model inference with tokenized input and generate output
-                inputs = tokenizer_base(question, return_tensors="pt", truncation=True, max_length=512).to(DEVICE)
+                # FIXED: Explicit input_ids and attention_mask to prevent degeneration
+                inputs = tokenizer_base(question, return_tensors="pt", truncation=True, max_length=512)
+                input_ids = inputs["input_ids"].to(DEVICE)
+                attention_mask = inputs["attention_mask"].to(DEVICE)
+                
                 with torch.no_grad():
                     outputs = base_model.generate(
-                        **inputs,
-                        max_length=GENERATION_CONFIG["max_length"],
-                        temperature=GENERATION_CONFIG["temperature"],
-                        top_p=GENERATION_CONFIG["top_p"],
-                        do_sample=GENERATION_CONFIG["do_sample"]
+                        input_ids=input_ids,
+                        attention_mask=attention_mask,
+                        max_new_tokens=256,              # Limit output length (safer than max_length)
+                        temperature=0.1,                 # Lower temperature for deterministic math answers
+                        do_sample=False,                 # Greedy decoding for math tasks
+                        repetition_penalty=1.2,          # Prevent repetitive output ("it it it...")
+                        pad_token_id=tokenizer_base.eos_token_id
                     )
                 response = tokenizer_base.decode(outputs[0], skip_special_tokens=True)
                 
@@ -167,6 +174,7 @@ def evaluate_lora_model(
     )
     tokenizer_base = AutoTokenizer.from_pretrained(model_name)
     tokenizer_base.pad_token = tokenizer_base.eos_token
+    print(f"✅ LoRA base model loaded on device: {base_model.device}")
     
     print(f"Applying LoRA configuration...")
     
@@ -200,14 +208,20 @@ def evaluate_lora_model(
             try:
                 # [BREAKPOINT_5] - LoRA Model Inference
                 # Description: Execute inference with LoRA-tuned model
-                inputs = tokenizer_base(question, return_tensors="pt", truncation=True, max_length=512).to(DEVICE)
+                # FIXED: Explicit input_ids and attention_mask to prevent degeneration
+                inputs = tokenizer_base(question, return_tensors="pt", truncation=True, max_length=512)
+                input_ids = inputs["input_ids"].to(DEVICE)
+                attention_mask = inputs["attention_mask"].to(DEVICE)
+                
                 with torch.no_grad():
                     outputs = lora_model.generate(
-                        **inputs,
-                        max_length=GENERATION_CONFIG["max_length"],
-                        temperature=GENERATION_CONFIG["temperature"],
-                        top_p=GENERATION_CONFIG["top_p"],
-                        do_sample=GENERATION_CONFIG["do_sample"]
+                        input_ids=input_ids,
+                        attention_mask=attention_mask,
+                        max_new_tokens=256,              # Limit output length (safer than max_length)
+                        temperature=0.1,                 # Lower temperature for deterministic math answers
+                        do_sample=False,                 # Greedy decoding for math tasks
+                        repetition_penalty=1.2,          # Prevent repetitive output ("it it it...")
+                        pad_token_id=tokenizer_base.eos_token_id
                     )
                 response = tokenizer_base.decode(outputs[0], skip_special_tokens=True)
                 
