@@ -8,8 +8,15 @@ import sys
 import os
 import json
 
-# Configure HuggingFace Hub environment
+# Configure HuggingFace Hub environment BEFORE importing transformers
 os.environ['HF_HUB_DISABLE_SYMLINKS_WARNING'] = '1'
+os.environ['TRANSFORMERS_OFFLINE'] = '0'
+
+# Patch signal module for Windows compatibility (SIGALRM doesn't exist on Windows)
+import signal
+if not hasattr(signal, 'SIGALRM'):
+    # Create a dummy SIGALRM for Windows
+    signal.SIGALRM = None
 
 from data_loader import load_all_datasets
 from model_evaluator import evaluate_baseline_model, evaluate_lora_model
