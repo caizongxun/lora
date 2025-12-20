@@ -1,6 +1,6 @@
 """
 Utility functions for visualization, logging, and result comparison
-Handles chart generation and performance metrics calculation
+Handles chart generation, performance metrics calculation, and result reporting
 """
 
 import json
@@ -9,6 +9,70 @@ import numpy as np
 from typing import Dict, Any
 from datetime import datetime
 from config import OUTPUT_DIR, LORA_CONFIG, BASE_MODEL_NAME, EVALUATION_TIMESTAMP
+
+
+def print_step_header(step_number: int, title: str) -> None:
+    """
+    Print formatted section header for console output
+    
+    Args:
+        step_number (int): Step number for the section
+        title (str): Title of the section
+    """
+    print()
+    print("=" * 80)
+    print(f"STEP {step_number}: {title}")
+    print("=" * 80)
+    print("-" * 80)
+    print()
+
+
+def print_variable_info(var_name: str, var_value: Any, var_type: str) -> None:
+    """
+    Print variable name, value, and type for debugging
+    
+    Args:
+        var_name (str): Name of the variable
+        var_value (Any): Value of the variable
+        var_type (str): Type of the variable as string
+    """
+    print(f"[BREAKPOINT] {var_name}: {var_type}")
+    if isinstance(var_value, (dict, list)) and len(str(var_value)) > 200:
+        print(f"  {str(var_value)[:200]}...")
+    else:
+        print(f"  {var_value}")
+    print()
+
+
+def save_results(
+    baseline_results: Dict[str, Dict[str, Any]],
+    lora_results: Dict[str, Dict[str, Any]],
+    datasets_dict: Dict[str, Dict[str, Any]]
+) -> None:
+    """
+    Save all evaluation results to output files
+    
+    Args:
+        baseline_results (dict): Baseline model evaluation results
+        lora_results (dict): LoRA model evaluation results
+        datasets_dict (dict): Original datasets with questions and answers
+    """
+    # Calculate comparison metrics
+    comparison_metrics = calculate_comparison_metrics(baseline_results, lora_results)
+    
+    # Save metrics to JSON
+    save_metrics_json(baseline_results, lora_results, comparison_metrics)
+    
+    # Save predictions to JSON
+    save_predictions_json(baseline_results, lora_results, datasets_dict)
+    
+    # Generate evaluation log
+    generate_evaluation_log(baseline_results, lora_results, comparison_metrics)
+    
+    # Generate visualizations
+    generate_performance_comparison(baseline_results, lora_results)
+    generate_improvement_percentage(comparison_metrics)
+    generate_radar_chart(baseline_results, lora_results)
 
 
 def calculate_comparison_metrics(
@@ -84,7 +148,7 @@ def generate_performance_comparison(
     
     fig, ax = plt.subplots(figsize=(12, 6), dpi=300)
     
-    bars1 = ax.bar(x - width/2, baseline_accuracies, width, label="Baseline (Phi-2)", color="#FF6B6B")
+    bars1 = ax.bar(x - width/2, baseline_accuracies, width, label="Baseline (Phi-3)", color="#FF6B6B")
     bars2 = ax.bar(x + width/2, lora_accuracies, width, label="LoRA Fine-tuned", color="#4ECDC4")
     
     ax.set_xlabel("Datasets", fontsize=12, fontweight="bold")
@@ -126,7 +190,7 @@ def generate_improvement_percentage(
     datasets = list(comparison_metrics.keys())
     improvements = [comparison_metrics[d]["improvement_pct"] for d in datasets]  # Improvement percentages
     
-    colors = ["#2ECC71" if imp > 30 else "#F39C12" for imp in improvements]  # Green if >30%, orange otherwise
+    colors = ["#2ECC71" if imp > 0 else "#E74C3C" for imp in improvements]  # Green if positive, red if negative
     
     fig, ax = plt.subplots(figsize=(12, 6), dpi=300)
     
@@ -141,7 +205,7 @@ def generate_improvement_percentage(
         width = bar.get_width()
         ax.text(width, bar.get_y() + bar.get_height()/2.,
                 f" {width:.2f}%",
-                ha="left", va="center", fontsize=11, fontweight="bold")
+                ha="left" if width > 0 else "right", va="center", fontsize=11, fontweight="bold")
     
     plt.tight_layout()
     plt.savefig(f"{OUTPUT_DIR}/improvement_percentage.png", dpi=300, bbox_inches="tight")
@@ -184,7 +248,7 @@ def generate_radar_chart(
     
     fig, ax = plt.subplots(figsize=(10, 10), dpi=300, subplot_kw=dict(projection="polar"))
     
-    ax.plot(angles, baseline_metrics, "o-", linewidth=2, label="Baseline (Phi-2)", color="#FF6B6B")
+    ax.plot(angles, baseline_metrics, "o-", linewidth=2, label="Baseline (Phi-3)", color="#FF6B6B")
     ax.fill(angles, baseline_metrics, alpha=0.25, color="#FF6B6B")
     
     ax.plot(angles, lora_metrics, "o-", linewidth=2, label="LoRA Fine-tuned", color="#4ECDC4")
@@ -223,7 +287,7 @@ def save_metrics_json(
         "evaluation_metadata": {
             "timestamp": EVALUATION_TIMESTAMP,
             "baseline_model": BASE_MODEL_NAME,
-            "model_size": "2.7B",
+            "model_size": "3.8B",
             "lora_config": {
                 "r": LORA_CONFIG["r"],
                 "lora_alpha": LORA_CONFIG["lora_alpha"],
@@ -328,7 +392,7 @@ def generate_evaluation_log(
     log_lines.append("=" * 80)
     log_lines.append("")
     log_lines.append(f"Evaluation Time: {EVALUATION_TIMESTAMP}")
-    log_lines.append(f"Baseline Model: {BASE_MODEL_NAME} (2.7B)")
+    log_lines.append(f"Baseline Model: {BASE_MODEL_NAME} (3.8B)")
     log_lines.append(f"LoRA Configuration: r={LORA_CONFIG['r']}, alpha={LORA_CONFIG['lora_alpha']}, dropout={LORA_CONFIG['lora_dropout']}")
     log_lines.append("")
     
@@ -348,7 +412,7 @@ def generate_evaluation_log(
         log_lines.append("")
         
         # Baseline results
-        log_lines.append("Baseline Model (Phi-2)")
+        log_lines.append("Baseline Model (Phi-3)")
         baseline_acc = baseline_results[dataset_name]["accuracy"] * 100
         baseline_correct = baseline_results[dataset_name]["correct_count"]
         baseline_total = baseline_results[dataset_name]["total_count"]
@@ -388,8 +452,6 @@ def generate_evaluation_log(
     log_lines.append(f"Baseline Model Average Accuracy: {baseline_avg:.2f}%")
     log_lines.append(f"LoRA Model Average Accuracy: {lora_avg:.2f}%")
     log_lines.append(f"Average Improvement: +{avg_improvement:.2f}%")
-    log_lines.append("")
-    log_lines.append("All three datasets achieved significant improvement!")
     log_lines.append("")
     
     # Output files
