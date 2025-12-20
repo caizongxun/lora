@@ -170,7 +170,48 @@ def create_training_dataset(
     
     print(f"\n✅ Dataset created: {len(dataset)} samples")
     
-    return dataset
+    # ====================================================================
+    # 🔄 CRITICAL: Tokenize the dataset
+    # ====================================================================
+    print(f"\n📄 Tokenizing dataset (converting text to tokens)...")
+    
+    def preprocess_function(examples):
+        """
+        Tokenize the text data
+        Converts raw text to input_ids, attention_mask, labels
+        """
+        # Tokenize the text
+        tokenized = tokenizer(
+            examples["text"],
+            truncation=True,
+            max_length=512,
+            padding="max_length",
+            return_tensors="pt"
+        )
+        
+        # For language modeling, labels are the same as input_ids
+        # (we're training the model to predict the next token)
+        tokenized["labels"] = tokenized["input_ids"].clone()
+        
+        return {
+            "input_ids": tokenized["input_ids"],
+            "attention_mask": tokenized["attention_mask"],
+            "labels": tokenized["labels"]
+        }
+    
+    # Apply tokenization to entire dataset
+    tokenized_dataset = dataset.map(
+        preprocess_function,
+        batched=True,
+        batch_size=32,
+        remove_columns=dataset.column_names,
+        desc="Tokenizing"
+    )
+    
+    print(f"✅ Tokenization complete!")
+    print(f"   Dataset now has columns: {tokenized_dataset.column_names}")
+    
+    return tokenized_dataset
 
 
 def get_quantization_config():
@@ -334,6 +375,9 @@ def train_lora_model():
             dataloader_pin_memory=True,
             dataloader_num_workers=0,
             
+            # CRITICAL FIX: Don't remove unused columns (we need them for tokenization)
+            remove_unused_columns=False,
+            
             # Other
             seed=42,
             disable_tqdm=False,
@@ -348,6 +392,7 @@ def train_lora_model():
         print(f"   - FP16 mixed precision: {training_args.fp16}")
         print(f"   - Optimizer: {training_args.optim}")
         print(f"   - Checkpoint dir: {checkpoint_dir}")
+        print(f"   - Remove unused columns: {training_args.remove_unused_columns}")
         
         # ====================================================================
         # STEP 6: Create Data Collator and Trainer
