@@ -67,7 +67,7 @@ LORA_CHECKPOINT_DIR = "./lora_checkpoint"  # Directory containing adapter_model.
 # Model Generation Parameters
 # IMPROVED: Changed to greedy decoding with lower temperature for more stable outputs
 GENERATION_CONFIG = {
-    "max_new_tokens": 256,  # Maximum new tokens to generate (not total length)
+    "max_new_tokens": 1024,  # INCREASED: From 256 to 1024 for more complete answers
     "temperature": 0.1,  # LOWERED: Very low temperature for deterministic generation
     "top_p": 0.95,  # Nucleus sampling parameter
     "do_sample": False,  # CHANGED: Use greedy decoding instead of sampling
