@@ -5,7 +5,12 @@ With detailed variable inspection at each step
 """
 
 import sys
+import os
 import json
+
+# Configure HuggingFace Hub environment
+os.environ['HF_HUB_DISABLE_SYMLINKS_WARNING'] = '1'
+
 from data_loader import load_all_datasets
 from model_evaluator import evaluate_baseline_model, evaluate_lora_model
 from utils import (
