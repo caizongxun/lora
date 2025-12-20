@@ -260,6 +260,14 @@ def evaluate_baseline_model(
         
         print(f"Baseline {dataset_name} Accuracy: {baseline_accuracy:.2%} ({correct_count}/{total_count})")
     
+    # CRITICAL: Free memory before returning
+    print("Cleaning up baseline model from memory...")
+    del base_model
+    del tokenizer_base
+    torch.cuda.empty_cache()
+    gc.collect()
+    print("Memory cleaned.")
+    
     return baseline_results
 
 
@@ -408,6 +416,15 @@ def evaluate_lora_model(
             "inference_time": elapsed_time
         }
         
-        print(f"LoRA {dataset_name} Accuracy: {lora_accuracy:.2%} ({correct_count}/{total_count})")
+        print(f"LoRA {dataset_name} Accuracy: {lora_accuracy:.2%} ({correct_count}/{total_count})\n")
     
+    # CRITICAL: Free memory after LoRA evaluation
+    print("Cleaning up LoRA model from memory...")
+    del lora_model
+    del base_model
+    del tokenizer_base
+    torch.cuda.empty_cache()
+    gc.collect()
+    print("Memory cleaned.")
+
     return lora_results
