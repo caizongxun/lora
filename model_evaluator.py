@@ -21,6 +21,27 @@ QUANTIZATION_CONFIG = BitsAndBytesConfig(
     bnb_8bit_compute_dtype=torch.bfloat16
 )
 
+
+def print_device_info():
+    """
+    Display current device information (GPU/CPU)
+    """
+    if torch.cuda.is_available():
+        device_name = torch.cuda.get_device_name(0)
+        device_count = torch.cuda.device_count()
+        print(f"\n🔹 Device Info:")
+        print(f"   - Device: GPU (CUDA)")
+        print(f"   - GPU Name: {device_name}")
+        print(f"   - GPU Count: {device_count}")
+        print(f"   - GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
+        print(f"   - CUDA Version: {torch.version.cuda}")
+    else:
+        print(f"\n🔹 Device Info:")
+        print(f"   - Device: CPU")
+        print(f"   - WARNING: Using CPU will be very slow for model inference!")
+    print()
+
+
 def extract_answer(response: str) -> str:
     """
     Extract numerical answer from model response text
@@ -99,6 +120,9 @@ def evaluate_baseline_model(
     tokenizer_base.pad_token = tokenizer_base.eos_token
     print(f"✅ Baseline model loaded on device: {base_model.device} (8-bit quantized)")
     
+    # Print device information
+    print_device_info()
+    
     baseline_results = {}  # Container for all results (dict[str, dict])
     
     for dataset_name, dataset_content in datasets_dict.items():
@@ -125,7 +149,7 @@ def evaluate_baseline_model(
                     outputs = base_model.generate(
                         input_ids=input_ids,
                         attention_mask=attention_mask,
-                        max_new_tokens=64,               # Reduced to 64 for lower memory usage
+                        max_new_tokens=256,              # INCREASED from 64 to allow complete reasoning
                         do_sample=False,                 # Greedy decoding for deterministic output
                         pad_token_id=tokenizer_base.eos_token_id
                     )
@@ -228,6 +252,9 @@ def evaluate_lora_model(
     tokenizer_base.pad_token = tokenizer_base.eos_token
     print(f"✅ LoRA base model loaded on device: {base_model.device} (8-bit quantized)")
     
+    # Print device information
+    print_device_info()
+    
     print(f"Applying LoRA configuration...")
     
     # [BREAKPOINT_4] - LoRA Configuration Application
@@ -270,7 +297,7 @@ def evaluate_lora_model(
                     outputs = lora_model.generate(
                         input_ids=input_ids,
                         attention_mask=attention_mask,
-                        max_new_tokens=64,               # Reduced to 64 for lower memory usage
+                        max_new_tokens=256,              # INCREASED from 64 to allow complete reasoning
                         do_sample=False,                 # Greedy decoding for deterministic output
                         pad_token_id=tokenizer_base.eos_token_id
                     )
