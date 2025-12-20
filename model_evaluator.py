@@ -88,8 +88,18 @@ def get_quantization_config():
         bnb_8bit_compute_dtype=torch.float16,
         bnb_8bit_use_double_quant=True,
         bnb_8bit_quant_type="nf4",
-        load_in_8bit_fp32_cpu_offload=True  # 🔧 ADDED: Allow CPU offload for layers that don't fit in GPU
+        load_in_8bit_fp32_cpu_offload=True
     )
+
+
+def get_device_map():
+    """Create device map for hybrid GPU/CPU inference"""
+    # 🔧 Use max_memory to specify GPU and CPU memory allocation
+    max_memory = {
+        0: "3.5GiB",  # Reserve 3.5GB for GPU
+        "cpu": "16GiB"  # Use up to 16GB CPU RAM
+    }
+    return max_memory
 
 
 def evaluate_baseline_model(
@@ -105,12 +115,13 @@ def evaluate_baseline_model(
 
     # 🔧 Use 8-bit quantization with CPU offload
     quantization_config = get_quantization_config()
-    print(f"🔍 Debug: Loading with 8-bit quantization + CPU offload...")
+    device_map = get_device_map()
+    print(f"🔍 Debug: Loading with 8-bit quantization + explicit device_map...")
     
     base_model = AutoModelForCausalLM.from_pretrained(
         model_name,
         quantization_config=quantization_config,
-        device_map="auto",
+        device_map=device_map,  # 🔧 CHANGED: Use explicit device_map instead of 'auto'
         trust_remote_code=True
     )
     
@@ -221,12 +232,13 @@ def evaluate_lora_model(
 
     # 🔧 Use 8-bit quantization with CPU offload
     quantization_config = get_quantization_config()
-    print(f"🔍 Debug: Loading with 8-bit quantization + CPU offload...")
+    device_map = get_device_map()
+    print(f"🔍 Debug: Loading with 8-bit quantization + explicit device_map...")
     
     base_model = AutoModelForCausalLM.from_pretrained(
         model_name,
         quantization_config=quantization_config,
-        device_map="auto",
+        device_map=device_map,  # 🔧 CHANGED: Use explicit device_map instead of 'auto'
         trust_remote_code=True
     )
     
