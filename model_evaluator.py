@@ -59,7 +59,11 @@ def print_device_info():
 def extract_answer(response: str) -> str:
     """
     Extract numerical answer or option letter (A-E) from model response text
-    Uses regex to find the final answer
+    
+    Strategy:
+    1. For numeric answers: Find ALL numbers in text, return the LAST one
+       (since final answer is always at the end of reasoning)
+    2. For options (A-E): Use priority rules to find the most explicit answer
     
     Args:
         response (str): Model generated text response
@@ -67,41 +71,55 @@ def extract_answer(response: str) -> str:
     Returns:
         answer (str): Extracted numeric answer string or option letter
     """
-    # Remove the input prompt from the response if possible to avoid extracting from question
-    # This is handled partially by skip_special_tokens=True and decoding only new tokens if needed
-    # But here we get full text usually. 
-    # Strategy: Look for the LAST matching pattern in the text
+    if not response or not response.strip():
+        return ""
     
-    # Combined patterns for numbers and options (A-E)
-    patterns = [
-        # Options A-E patterns
-        r"answer is\s*([A-E])",
-        r"option\s*([A-E])",
-        r"^([A-E])\.",
-        r"\b([A-E])\b\s*$",  # Just the letter at the end
-        
-        # Numeric patterns
-        r"answer[:]?\s*(-?\d+)",
-        r"=\s*(-?\d+)",
-        r"is\s*(-?\d+)",
-        r"(-?\d+)\s*(?:is the|answer|result)",
-        r"(-?\d+)$"
+    # PRIORITY 1: Look for explicit option format patterns first
+    # These are high-confidence indicators for multiple choice
+    explicit_option_patterns = [
+        r"^\s*([A-E])\.\s",  # Starts with "A. ", "B. ", etc
+        r"answer[\s:]*([A-E])",  # "answer: A" or "answer A"
+        r"option[\s:]*([A-E])",  # "option: A" or "option A"
+        r"correct answer[\s:]*([A-E])",  # "correct answer: A"
     ]
     
-    # Iterate through patterns and try to find the last match in the text
-    # Finding the LAST match is crucial because intermediate reasoning might contain numbers
-    final_answer = ""
+    for pattern in explicit_option_patterns:
+        match = re.search(pattern, response, re.IGNORECASE | re.MULTILINE)
+        if match:
+            return match.group(1).upper()
     
-    for pattern in patterns:
-        matches = list(re.finditer(pattern, response, re.IGNORECASE))
+    # PRIORITY 2: Extract ALL numbers and take the LAST one
+    # This handles numeric questions where final answer is at the end
+    all_numbers = re.findall(r'-?\d+(?:,\d+)*(?:\.\d+)?', response)
+    if all_numbers:
+        # Remove commas and decimal points to get clean numbers
+        last_number = all_numbers[-1].replace(',', '')
+        # Convert to int if it's a whole number, otherwise keep as is
+        try:
+            if '.' not in last_number:
+                return str(int(last_number))
+            else:
+                return last_number
+        except ValueError:
+            return all_numbers[-1]
+    
+    # PRIORITY 3: Look for fallback option patterns
+    fallback_patterns = [
+        r"[\b\(]([A-E])[\b\)]",  # "(A)" or "(A) text"
+        r"([A-E])\.",  # "A." but not at start
+    ]
+    
+    for pattern in fallback_patterns:
+        matches = re.findall(pattern, response, re.IGNORECASE)
         if matches:
-            # Get the last match
-            final_answer = matches[-1].group(1)
-            # If we found a strong match like "answer is X", prefer that over others
-            if "answer" in pattern or "option" in pattern:
-                return final_answer
+            return matches[0].upper()
     
-    return final_answer
+    # PRIORITY 4: As last resort, just look for any single letter A-E
+    single_letter = re.search(r'[A-E]', response, re.IGNORECASE)
+    if single_letter:
+        return single_letter.group(0).upper()
+    
+    return ""
 
 
 def evaluate_baseline_model(
