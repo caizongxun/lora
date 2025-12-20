@@ -123,9 +123,10 @@ def main():
         print_step_header(1, "Loading datasets")
         print("-"*80)
         
-        # Changed from 100 to 20 for CPU performance balance
-        # 20 samples is enough to show trends without waiting hours on CPU
-        num_samples = 20  # Number of samples per dataset (int)
+        # QUICK TEST: Using only 3 samples per dataset for rapid sanity check
+        # Expected runtime on CPU: ~3-5 minutes
+        # Once confirmed working, increase to 20 or 100
+        num_samples = 3  # Number of samples per dataset (int) - QUICK TEST VERSION
         
         datasets_dict = load_all_datasets(num_samples=num_samples)  # Container for all datasets (dict[str, dict])
         print("")
