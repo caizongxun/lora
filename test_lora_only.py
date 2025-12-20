@@ -14,7 +14,7 @@ from datetime import datetime
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from data_loader import load_datasets
+from data_loader import load_all_datasets
 from model_evaluator import evaluate_lora_model, print_device_info
 from config import LORA_CONFIG, DATASET_CONFIG, OUTPUT_DIR, DEVICE
 from utils import print_step_header, print_variable_info, save_results, calculate_comparison_metrics
@@ -38,7 +38,7 @@ def main():
     print_step_header(1, "Loading datasets")
     print("-"*80)
     
-    datasets_dict = load_datasets(DATASET_CONFIG)
+    datasets_dict = load_all_datasets()
     print(f"\n✅ Loaded {len(datasets_dict)} datasets")
     for dataset_name in datasets_dict.keys():
         num_samples = len(datasets_dict[dataset_name]["questions_list"])
@@ -91,11 +91,22 @@ def main():
     print_step_header(4, "Saving LoRA evaluation results")
     print("-"*80)
     
+    # For LoRA-only testing, we create dummy baseline results
+    baseline_results = {
+        dataset_name: {
+            "accuracy": 0.0,
+            "correct_count": 0,
+            "total_count": 0,
+            "inference_time": 0.0,
+            "predictions": []
+        }
+        for dataset_name in datasets_dict.keys()
+    }
+    
     save_results(
-        baseline_results={},  # Empty since we skipped baseline
+        baseline_results=baseline_results,
         lora_results=lora_results,
-        output_dir=OUTPUT_DIR,
-        skip_baseline=True
+        datasets_dict=datasets_dict
     )
     
     print(f"✅ Results saved to: {OUTPUT_DIR}")
