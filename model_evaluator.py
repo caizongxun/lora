@@ -22,6 +22,30 @@ QUANTIZATION_CONFIG = BitsAndBytesConfig(
 )
 
 
+def patch_matmul_lt_state():
+    """
+    Monkey-patch to fix the missing 'memory_efficient_backward' attribute in MatmulLtState.
+    This is needed due to version incompatibility between bitsandbytes and peft on Windows.
+    """
+    try:
+        from bitsandbytes.nn.modules import Params4bit
+        # Check if MatmulLtState exists and needs patching
+        if hasattr(Params4bit, 'state') and hasattr(Params4bit.state, '__dict__'):
+            # Try to access the state class
+            try:
+                from bitsandbytes.nn.modules import MatmulLtState
+                # Add the missing attribute if it doesn't exist
+                if not hasattr(MatmulLtState, 'memory_efficient_backward'):
+                    MatmulLtState.memory_efficient_backward = True
+                    print("✅ Patched MatmulLtState.memory_efficient_backward")
+            except (ImportError, AttributeError):
+                # Alternative: patch at the instance level
+                # We'll handle this in get_peft_model try-except
+                pass
+    except ImportError:
+        pass
+
+
 def print_device_info():
     """Display current device information (GPU/CPU)"""
     if torch.cuda.is_available():
@@ -205,9 +229,6 @@ def evaluate_lora_model(
 ) -> Dict[str, Dict[str, Any]]:
     """
     Evaluate LoRA-tuned model on all datasets
-    
-    NOTE: If there's a compatibility error between peft and bitsandbytes,
-    this function will return baseline results as a fallback.
     """
     print(f"Loading base model for LoRA: {model_name}")
     print(f"Using 8-bit quantization to save GPU memory...")
@@ -227,6 +248,21 @@ def evaluate_lora_model(
 
     print("Preparing model for k-bit training (compatibility fix)...")
     base_model = prepare_model_for_kbit_training(base_model)
+    print("✅ Model preparation complete.")
+    
+    # 🔧 CRITICAL: Patch MatmulLtState to fix bitsandbytes/peft incompatibility
+    print("Applying compatibility patches...")
+    patch_matmul_lt_state()
+    
+    # Manually patch model's quantized layers if needed
+    for module in base_model.modules():
+        if hasattr(module, 'weight') and hasattr(module.weight, 'data'):
+            # For 8-bit quantized layers
+            if hasattr(module, 'state'):
+                if not hasattr(module.state, 'memory_efficient_backward'):
+                    module.state.memory_efficient_backward = True
+    
+    print("✅ Compatibility patches applied.")
     
     print_device_info()
     
@@ -241,35 +277,9 @@ def evaluate_lora_model(
         task_type=lora_config_dict["task_type"]
     )
     
-    # 🔧 TRY-EXCEPT: Handle LoRA creation compatibility issues
-    try:
-        lora_model = get_peft_model(base_model, lora_config)
-        lora_model.print_trainable_parameters()
-        print("\n✅ LoRA model successfully created!\n")
-    except AttributeError as e:
-        # If there's a version compatibility issue (e.g., memory_efficient_backward)
-        # we skip LoRA evaluation and return empty results
-        print(f"\n⚠️  WARNING: Cannot create LoRA model due to version incompatibility.")
-        print(f"Error: {str(e)}")
-        print(f"\nFallback: Skipping LoRA evaluation. Returning empty LoRA results.\n")
-        
-        # Return empty results structure
-        lora_results = {}
-        for dataset_name in datasets_dict.keys():
-            lora_results[dataset_name] = {
-                "accuracy": 0.0,
-                "correct_count": 0,
-                "total_count": 0,
-                "predictions": [],
-                "inference_time": 0.0
-            }
-        
-        # Cleanup
-        del base_model, tokenizer_base
-        torch.cuda.empty_cache()
-        gc.collect()
-        
-        return lora_results
+    lora_model = get_peft_model(base_model, lora_config)
+    lora_model.print_trainable_parameters()
+    print("\n✅ LoRA model successfully created!\n")
     
     lora_results = {}
     
