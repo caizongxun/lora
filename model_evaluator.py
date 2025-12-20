@@ -17,7 +17,7 @@ import os
 import json
 from typing import Dict, List, Any
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig, BitsAndBytesConfig
-from peft import get_peft_model, LoraConfig, prepare_model_for_kbit_training, PeftModel
+from peft import get_peft_model, LoraConfig, PeftModel
 from config import GENERATION_CONFIG, TIMEOUT_SECONDS, LORA_CHECKPOINT_DIR
 
 
@@ -44,7 +44,6 @@ def extract_answer(response: str) -> str:
     if not response or not response.strip():
         return ""
     
-    # PRIORITY 1: Look for explicit option format patterns first
     explicit_option_patterns = [
         r"^\s*([A-E])\.\s",
         r"answer[\s:]*([A-E])",
@@ -57,7 +56,6 @@ def extract_answer(response: str) -> str:
         if match:
             return match.group(1).upper()
     
-    # PRIORITY 2: Extract ALL numbers and take the LAST one
     all_numbers = re.findall(r'-?\d+(?:,\d+)*(?:\.\d+)?', response)
     if all_numbers:
         last_number = all_numbers[-1].replace(',', '')
@@ -69,7 +67,6 @@ def extract_answer(response: str) -> str:
         except ValueError:
             return all_numbers[-1]
     
-    # PRIORITY 3: Look for fallback option patterns
     fallback_patterns = [
         r"[\b\(]([A-E])[\b\)]",
         r"([A-E])\.",
@@ -80,7 +77,6 @@ def extract_answer(response: str) -> str:
         if matches:
             return matches[0].upper()
     
-    # PRIORITY 4: As last resort
     single_letter = re.search(r'[A-E]', response, re.IGNORECASE)
     if single_letter:
         return single_letter.group(0).upper()
@@ -113,7 +109,6 @@ def load_lora_with_compatibility(base_model, hf_model_id: str):
     try:
         print(f"[INFO] Attempting to load LoRA weights from: {hf_model_id}")
         
-        # First try normal loading
         lora_model = PeftModel.from_pretrained(
             base_model,
             hf_model_id,
@@ -126,7 +121,6 @@ def load_lora_with_compatibility(base_model, hf_model_id: str):
         if "alora_invocation_tokens" in str(e) or "unexpected keyword argument" in str(e):
             print(f"[INFO] Detected PEFT version mismatch, attempting compatible loading...")
             
-            # Load and filter adapter config
             from huggingface_hub import hf_hub_download
             config_path = hf_hub_download(
                 repo_id=hf_model_id,
@@ -136,14 +130,12 @@ def load_lora_with_compatibility(base_model, hf_model_id: str):
             with open(config_path, 'r') as f:
                 adapter_config = json.load(f)
             
-            # Remove unknown parameters
             unknown_params = ["alora_invocation_tokens", "layer_replication"]
             for param in unknown_params:
                 if param in adapter_config:
                     print(f"[INFO] Removing unsupported parameter: {param}")
                     del adapter_config[param]
             
-            # Create LoRA config from filtered config
             print(f"[INFO] Creating LoRA config with filtered parameters...")
             lora_config = LoraConfig(
                 r=adapter_config.get("r", 8),
@@ -154,10 +146,8 @@ def load_lora_with_compatibility(base_model, hf_model_id: str):
                 task_type=adapter_config.get("task_type", "CAUSAL_LM")
             )
             
-            # Attach LoRA config
             lora_model = get_peft_model(base_model, lora_config)
             
-            # Load weights manually
             print(f"[INFO] Loading weights from checkpoint...")
             from peft.utils import WEIGHTS_NAME
             from safetensors.torch import load_file
@@ -188,7 +178,6 @@ def evaluate_baseline_model(
     print(f"Loading baseline model: {model_name}")
     print(f"Using 4-bit quantization...")
 
-    # Use 4-bit quantization for maximum memory efficiency
     quantization_config = get_quantization_config()
     print(f"[DEBUG] Loading with 4-bit quantization, device_map='cuda:0'...")
     
@@ -210,7 +199,6 @@ def evaluate_baseline_model(
     
     baseline_results = {}
     
-    # Get max_new_tokens from config
     max_tokens = GENERATION_CONFIG.get("max_new_tokens", 1024)
     print(f"[INFO] Using max_new_tokens: {max_tokens}")
     
@@ -228,9 +216,6 @@ def evaluate_baseline_model(
             try:
                 prompt = f"<|user|>\n{question}<|end|>\n<|assistant|>\n"
                 inputs = tokenizer_base(prompt, return_tensors="pt", truncation=True, max_length=512)
-                # NOTE: DO NOT call .to(DEVICE) for 4-bit quantized models
-                # The model is already on the correct device via device_map="cuda:0"
-                # Calling .to() will raise ValueError
                 input_ids = inputs["input_ids"]
                 attention_mask = inputs["attention_mask"]
                 
@@ -238,7 +223,7 @@ def evaluate_baseline_model(
                     outputs = base_model.generate(
                         input_ids=input_ids,
                         attention_mask=attention_mask,
-                        max_new_tokens=max_tokens,  # USE CONFIG VALUE
+                        max_new_tokens=max_tokens,
                         do_sample=False,
                         pad_token_id=tokenizer_base.eos_token_id
                     )
@@ -319,7 +304,6 @@ def evaluate_lora_model_with_checkpoint(
     print(f"Loading base model for LoRA: {model_name}")
     print(f"Using 4-bit quantization...")
 
-    # Use 4-bit quantization for maximum memory efficiency
     quantization_config = get_quantization_config()
     
     base_model = AutoModelForCausalLM.from_pretrained(
@@ -335,21 +319,15 @@ def evaluate_lora_model_with_checkpoint(
     tokenizer_base = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
     tokenizer_base.pad_token = tokenizer_base.eos_token
     print(f"[SUCCESS] LoRA base model ready")
-
-    # REMOVED: prepare_model_for_kbit_training() call
-    # REASON: Causes .to() error with 4-bit quantized models
-    # NOTE: Model is already prepared via device_map and quantization_config
     print("[INFO] Model preparation skipped (already 4-bit quantized)")
     
     print_device_info()
     
-    # CRITICAL: Load trained LoRA weights from HuggingFace Hub with compatibility handling
     print(f"\n[INFO] Downloading trained LoRA weights from Hugging Face Hub...")
     print(f"       Repository: {hf_model_id}")
     print(f"       (This may take a few seconds on first run)")
     
     try:
-        # Use the safe loading function
         lora_model = load_lora_with_compatibility(base_model, hf_model_id)
         print(f"\n[SUCCESS] Successfully downloaded and loaded LoRA weights from HF Hub!")
         print(f"[SUCCESS] Using TRAINED LoRA adapters (not random initialization)")
@@ -367,7 +345,6 @@ def evaluate_lora_model_with_checkpoint(
     
     lora_results = {}
     
-    # Get max_new_tokens from config
     max_tokens = GENERATION_CONFIG.get("max_new_tokens", 1024)
     print(f"[INFO] Using max_new_tokens: {max_tokens}")
     
@@ -385,9 +362,6 @@ def evaluate_lora_model_with_checkpoint(
             try:
                 prompt = f"<|user|>\n{question}<|end|>\n<|assistant|>\n"
                 inputs = tokenizer_base(prompt, return_tensors="pt", truncation=True, max_length=512)
-                # NOTE: DO NOT call .to(DEVICE) for 4-bit quantized models
-                # The model is already on the correct device via device_map="cuda:0"
-                # Calling .to() will raise ValueError
                 input_ids = inputs["input_ids"]
                 attention_mask = inputs["attention_mask"]
                 
@@ -395,7 +369,7 @@ def evaluate_lora_model_with_checkpoint(
                     outputs = lora_model.generate(
                         input_ids=input_ids,
                         attention_mask=attention_mask,
-                        max_new_tokens=max_tokens,  # USE CONFIG VALUE
+                        max_new_tokens=max_tokens,
                         do_sample=False,
                         pad_token_id=tokenizer_base.eos_token_id
                     )
@@ -472,7 +446,6 @@ def evaluate_lora_model(
     print(f"Loading base model for LoRA: {model_name}")
     print(f"Using 4-bit quantization...")
 
-    # Use 4-bit quantization for maximum memory efficiency
     quantization_config = get_quantization_config()
     print(f"[DEBUG] Loading with 4-bit quantization, device_map='cuda:0'...")
     
@@ -490,7 +463,6 @@ def evaluate_lora_model(
     tokenizer_base.pad_token = tokenizer_base.eos_token
     print(f"[SUCCESS] LoRA base model ready for configuration")
 
-    # REMOVED: prepare_model_for_kbit_training() call (causes .to() error)
     print("[INFO] Model preparation skipped (already 4-bit quantized)")
     
     print_device_info()
@@ -509,15 +481,13 @@ def evaluate_lora_model(
     lora_model = get_peft_model(base_model, lora_config)
     lora_model.print_trainable_parameters()
     
-    # CRITICAL: Load trained LoRA weights from local checkpoint
     print(f"\n[INFO] Attempting to load trained LoRA weights...")
     if os.path.exists(LORA_CHECKPOINT_DIR):
         try:
-            # Load the trained LoRA weights from checkpoint
             lora_model = PeftModel.from_pretrained(
                 base_model,
                 LORA_CHECKPOINT_DIR,
-                is_trainable=False  # Set to False for inference only
+                is_trainable=False
             )
             print(f"[SUCCESS] Loaded trained LoRA weights from: {LORA_CHECKPOINT_DIR}")
             print(f"[SUCCESS] This model now uses TRAINED LoRA adapters, NOT random initialization")
@@ -534,7 +504,6 @@ def evaluate_lora_model(
     
     lora_results = {}
     
-    # Get max_new_tokens from config
     max_tokens = GENERATION_CONFIG.get("max_new_tokens", 1024)
     print(f"[INFO] Using max_new_tokens: {max_tokens}")
     
@@ -552,9 +521,6 @@ def evaluate_lora_model(
             try:
                 prompt = f"<|user|>\n{question}<|end|>\n<|assistant|>\n"
                 inputs = tokenizer_base(prompt, return_tensors="pt", truncation=True, max_length=512)
-                # NOTE: DO NOT call .to(DEVICE) for 4-bit quantized models
-                # The model is already on the correct device via device_map="cuda:0"
-                # Calling .to() will raise ValueError
                 input_ids = inputs["input_ids"]
                 attention_mask = inputs["attention_mask"]
                 
@@ -562,7 +528,7 @@ def evaluate_lora_model(
                     outputs = lora_model.generate(
                         input_ids=input_ids,
                         attention_mask=attention_mask,
-                        max_new_tokens=max_tokens,  # USE CONFIG VALUE
+                        max_new_tokens=max_tokens,
                         do_sample=False,
                         pad_token_id=tokenizer_base.eos_token_id
                     )
