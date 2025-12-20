@@ -6,11 +6,16 @@ Handles GSM8K, CommonsenseQA, and SVAMP datasets
 import re
 from datasets import load_dataset
 from typing import Tuple, List, Any
+from config import DATASET_CONFIG
 
 
-def load_gsm8k_samples(num_samples: int = 100) -> Tuple[List[str], List[str]]:
+def load_gsm8k_samples(num_samples: int = None) -> Tuple[List[str], List[str]]:
     """Load GSM8K dataset samples"""
     try:
+        # Use config num_samples if not explicitly provided
+        if num_samples is None:
+            num_samples = DATASET_CONFIG["gsm8k"]["num_samples"]
+            
         dataset = load_dataset("gsm8k", "main", split="test")
         
         if num_samples and len(dataset) > num_samples:
@@ -36,9 +41,13 @@ def load_gsm8k_samples(num_samples: int = 100) -> Tuple[List[str], List[str]]:
         return [], []
 
 
-def load_commonsenseqa_samples(num_samples: int = 100) -> Tuple[List[str], List[str]]:
+def load_commonsenseqa_samples(num_samples: int = None) -> Tuple[List[str], List[str]]:
     """Load CommonsenseQA dataset samples"""
     try:
+        # Use config num_samples if not explicitly provided
+        if num_samples is None:
+            num_samples = DATASET_CONFIG["commonsenseqa"]["num_samples"]
+            
         # Fixed: Removed trust_remote_code=True as it's deprecated for standard datasets
         try:
             dataset = load_dataset("commonsense_qa", split="validation")
@@ -71,9 +80,13 @@ def load_commonsenseqa_samples(num_samples: int = 100) -> Tuple[List[str], List[
         return [], []
 
 
-def load_svamp_samples(num_samples: int = 100) -> Tuple[List[str], List[str]]:
+def load_svamp_samples(num_samples: int = None) -> Tuple[List[str], List[str]]:
     """Load SVAMP dataset samples"""
     try:
+        # Use config num_samples if not explicitly provided
+        if num_samples is None:
+            num_samples = DATASET_CONFIG["svamp"]["num_samples"]
+            
         # Fixed: Removed trust_remote_code=True as it's deprecated for standard datasets
         try:
             dataset = load_dataset("ChilleD/SVAMP", split="test")
@@ -98,10 +111,20 @@ def load_svamp_samples(num_samples: int = 100) -> Tuple[List[str], List[str]]:
         return [], []
 
 
-def load_all_datasets(num_samples: int = 100) -> dict:
-    """Load all datasets"""
+def load_all_datasets(num_samples: int = None) -> dict:
+    """
+    Load all datasets using num_samples from DATASET_CONFIG
+    
+    Args:
+        num_samples (int, optional): Override config num_samples. 
+                                    If None, use values from DATASET_CONFIG.
+    
+    Returns:
+        dict: Dictionary containing datasets with questions and answers
+    """
     datasets_dict = {}
     
+    # Load GSM8K with its configured num_samples
     questions, answers = load_gsm8k_samples(num_samples)
     if questions:
         datasets_dict["gsm8k"] = {
@@ -109,6 +132,7 @@ def load_all_datasets(num_samples: int = 100) -> dict:
             "ground_truth_answers": answers
         }
     
+    # Load CommonsenseQA with its configured num_samples
     questions, answers = load_commonsenseqa_samples(num_samples)
     if questions:
         datasets_dict["commonsenseqa"] = {
@@ -116,6 +140,7 @@ def load_all_datasets(num_samples: int = 100) -> dict:
             "ground_truth_answers": answers
         }
     
+    # Load SVAMP with its configured num_samples
     questions, answers = load_svamp_samples(num_samples)
     if questions:
         datasets_dict["svamp"] = {
