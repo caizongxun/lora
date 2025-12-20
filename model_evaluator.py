@@ -17,7 +17,7 @@ import json
 from typing import Dict, List, Any
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig, BitsAndBytesConfig
 from peft import get_peft_model, LoraConfig, prepare_model_for_kbit_training, PeftModel
-from config import GENERATION_CONFIG, DEVICE, TIMEOUT_SECONDS, LORA_CHECKPOINT_DIR
+from config import GENERATION_CONFIG, TIMEOUT_SECONDS, LORA_CHECKPOINT_DIR
 
 
 def print_device_info():
@@ -227,8 +227,11 @@ def evaluate_baseline_model(
             try:
                 prompt = f"<|user|>\n{question}<|end|>\n<|assistant|>\n"
                 inputs = tokenizer_base(prompt, return_tensors="pt", truncation=True, max_length=512)
-                input_ids = inputs["input_ids"].to(DEVICE)
-                attention_mask = inputs["attention_mask"].to(DEVICE)
+                # NOTE: DO NOT call .to(DEVICE) for 4-bit quantized models
+                # The model is already on the correct device via device_map="cuda:0"
+                # Calling .to() will raise ValueError
+                input_ids = inputs["input_ids"]
+                attention_mask = inputs["attention_mask"]
                 
                 with torch.no_grad():
                     outputs = base_model.generate(
@@ -378,8 +381,11 @@ def evaluate_lora_model_with_checkpoint(
             try:
                 prompt = f"<|user|>\n{question}<|end|>\n<|assistant|>\n"
                 inputs = tokenizer_base(prompt, return_tensors="pt", truncation=True, max_length=512)
-                input_ids = inputs["input_ids"].to(DEVICE)
-                attention_mask = inputs["attention_mask"].to(DEVICE)
+                # NOTE: DO NOT call .to(DEVICE) for 4-bit quantized models
+                # The model is already on the correct device via device_map="cuda:0"
+                # Calling .to() will raise ValueError
+                input_ids = inputs["input_ids"]
+                attention_mask = inputs["attention_mask"]
                 
                 with torch.no_grad():
                     outputs = lora_model.generate(
@@ -543,8 +549,11 @@ def evaluate_lora_model(
             try:
                 prompt = f"<|user|>\n{question}<|end|>\n<|assistant|>\n"
                 inputs = tokenizer_base(prompt, return_tensors="pt", truncation=True, max_length=512)
-                input_ids = inputs["input_ids"].to(DEVICE)
-                attention_mask = inputs["attention_mask"].to(DEVICE)
+                # NOTE: DO NOT call .to(DEVICE) for 4-bit quantized models
+                # The model is already on the correct device via device_map="cuda:0"
+                # Calling .to() will raise ValueError
+                input_ids = inputs["input_ids"]
+                attention_mask = inputs["attention_mask"]
                 
                 with torch.no_grad():
                     outputs = lora_model.generate(
