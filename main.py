@@ -2,6 +2,9 @@
 Main entry point for LoRA Fine-tuning Evaluation Pipeline
 Orchestrates data loading, model evaluation, and result generation
 With detailed variable inspection at each step
+
+NOTE: model_evaluator.py now uses 4-bit quantization for memory efficiency
+      This allows the pipeline to run on RTX 3050 Ti (4GB VRAM)
 """
 
 import sys
@@ -124,6 +127,7 @@ def main():
     print(" "*20 + "LoRA Fine-Tuning Evaluation Pipeline")
     print(" "*15 + "With Step-by-Step Variable Inspection")
     print("="*80)
+    print("📌 Using 4-bit quantization for memory efficiency (RTX 3050 Ti compatible)")
     print("")
     
     try:
@@ -131,10 +135,11 @@ def main():
         print_step_header(1, "Loading datasets")
         print("-"*80)
         
-        # QUICK TEST: Using only 3 samples per dataset for rapid sanity check
-        # Expected runtime on CPU: ~3-5 minutes
-        # Once confirmed working, increase to 20 or 100
-        num_samples = 3  # Number of samples per dataset (int) - QUICK TEST VERSION
+        # 🔧 Sample size configuration
+        # 3: Quick test (very fast, ~5 minutes)
+        # 10: Balanced (medium speed, ~10-15 minutes)
+        # 100: Full evaluation (slow, ~60+ minutes)
+        num_samples = 10  # Number of samples per dataset (int)
         
         datasets_dict = load_all_datasets(num_samples=num_samples)  # Container for all datasets (dict[str, dict])
         print("")
@@ -161,6 +166,7 @@ def main():
         print("")
         
         # STEP 2: Evaluate Baseline Model
+        # 🔧 Uses 4-bit quantization in model_evaluator.py
         print_step_header(2, "Evaluating baseline model")
         print("-"*80)
         baseline_results = evaluate_baseline_model(
@@ -188,6 +194,7 @@ def main():
         print("")
         
         # STEP 3: Evaluate LoRA Model
+        # 🔧 Uses 4-bit quantization in model_evaluator.py
         print_step_header(3, "Evaluating LoRA fine-tuned model")
         print("-"*80)
         lora_results = evaluate_lora_model(
@@ -266,15 +273,15 @@ def main():
         print("")
         
         print("="*80)
-        print("Evaluation pipeline completed successfully!")
-        print(f"All results saved to: {OUTPUT_DIR}/")
+        print("✅ Evaluation pipeline completed successfully!")
+        print(f"📁 All results saved to: {OUTPUT_DIR}/")
         print("="*80)
         
         return 0
         
     except Exception as e:
         print(f"")
-        print(f"Error during evaluation: {str(e)}")
+        print(f"❌ Error during evaluation: {str(e)}")
         print(f"")
         import traceback
         traceback.print_exc()
