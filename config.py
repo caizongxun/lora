@@ -1,6 +1,9 @@
 """
 Configuration file for LoRA evaluation project
 Defines model names, dataset parameters, and LoRA configuration
+
+🔧 KEY UPDATE: Now includes HF_MODEL_ID for downloading trained LoRA weights
+              from Hugging Face Hub instead of using random initialization
 """
 
 import os
@@ -9,6 +12,17 @@ from datetime import datetime
 # Model Configuration
 BASE_MODEL_NAME = "microsoft/Phi-3-mini-4k-instruct"  # Base model identifier - Upgraded from Phi-2
 MODEL_SIZE = "3.8B"  # Model size indicator
+
+# 🔧 Hugging Face LoRA Model ID
+# This is the trained LoRA weights from HF Hub
+# Can be overridden by HF_MODEL_ID environment variable
+HF_MODEL_ID = os.getenv(
+    "HF_MODEL_ID",
+    "zongowo111/phi3-lora-gsm8k-commonsense"  # Your trained LoRA model
+)
+
+print(f"\n📍 Using LoRA Model: {HF_MODEL_ID}")
+print(f"   Set HF_MODEL_ID environment variable to use a different model.\n")
 
 # Dataset Configuration
 DATASET_CONFIG = {
@@ -43,7 +57,8 @@ LORA_CONFIG = {
 }
 
 # 🔧 LoRA Checkpoint Configuration
-# Specify the directory where trained LoRA weights are saved
+# Note: This is now replaced by HF_MODEL_ID which downloads from Hugging Face Hub
+# Kept for backward compatibility only
 LORA_CHECKPOINT_DIR = "./lora_checkpoint"  # Directory containing adapter_model.bin and adapter_config.json
 # For Colab, you can change this to:
 # LORA_CHECKPOINT_DIR = "/content/drive/MyDrive/lora_checkpoint"  # If using Google Drive
